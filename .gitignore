@@ -1,0 +1,33 @@
+# ── 原始文獻（受著作權保護，切勿上傳）─────────────────
+raw/*
+!raw/.gitkeep
+!raw/finish/
+raw/finish/*
+!raw/finish/.gitkeep
+!raw/assets/
+raw/assets/*
+!raw/assets/.gitkeep
+
+# ── PDF 提取暫存 ───────────────────────────────────
+output/
+*_extracted.txt
+*.tmp
+
+# ── 你的個人 wiki 內容（預設保持私有；見 DISCLAIMER.md）──
+# 若要把本資料夾當「自己的私有知識庫」用 git 備份，
+# 請改用 private repo，並移除以下註解以追蹤內容：
+wiki/source-*.md
+wiki/entity-*.md
+wiki/concept-*.md
+wiki/comparison-*.md
+wiki/synthesis-*.md
+wiki/query-*.md
+# （index.md 與 log.md 不在上方清單，預設會被追蹤——
+#   若它們也含受著作權保護的摘要，請自行加入忽略）
+
+# ── Obsidian / OS / 編輯器 ─────────────────────────
+.obsidian/
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
