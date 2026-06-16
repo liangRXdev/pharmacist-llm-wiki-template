@@ -25,10 +25,10 @@ Vault/
 ├── raw/                  ← 原始文獻（LLM 唯讀，不可修改）
 │   ├── finish/           ← 已完成 ingest 的文獻（移入後仍唯讀）
 │   └── assets/           ← 從文章下載的圖片
-├── wiki/                 ← LLM 維護的知識頁面（LLM 可讀寫）
-│   ├── index.md          ← 全庫目錄（每次 ingest 後更新）
-│   └── log.md            ← 異動日誌（只追加，不刪改）
-├── Templates/            ← 頁面 frontmatter 模板
+├── wiki/                 ← LLM 維護的知識頁面（LLM 可讀寫；.gitignore 白名單預設不追蹤內容）
+│   ├── index.md          ← 全庫目錄（每次 ingest 後更新；首次由 Templates/index.md 複製）
+│   └── log.md            ← 異動日誌（只追加，不刪改；首次由 Templates/log.md 複製）
+├── Templates/            ← 頁面 frontmatter 模板 + index/log 空骨架
 └── CLAUDE.md             ← 本檔案（schema）
 ```
 
@@ -36,6 +36,8 @@ Vault/
 - `raw/` 內檔案：LLM **唯讀**，禁止修改
 - `raw/finish/`：已 ingest 文獻；ingest 完成後由 LLM 移入
 - `wiki/`：LLM 全權負責建立與更新
+- **首次使用**：若 `wiki/index.md` 或 `wiki/log.md` 不存在（fresh clone 只含 `wiki/.gitkeep`），先從 `Templates/` 複製對應骨架再開始
+- `wiki/` 內容受 `.gitignore` 白名單保護（預設不追蹤），避免著作權摘要誤 commit 上 public repo
 - 使用者只負責：放入原始文獻、提問、決定方向
 
 ---
@@ -249,6 +251,7 @@ docling split.pdf --to md --output <輸出目錄> --table-mode accurate
 
 ## 八、會話開始時的標準動作
 
+0. 確認 `wiki/index.md`、`wiki/log.md` 存在；若缺（fresh clone）→ 從 `Templates/` 複製對應骨架後再繼續
 1. 讀取 `wiki/index.md`（掌握現有知識狀態）
 2. 讀取 `wiki/log.md` 最後 10 筆（了解最近進展）
 3. 向使用者確認：「目前 wiki 有 N 頁，最近一次操作是 [日期/動作]，今天要做什麼？」

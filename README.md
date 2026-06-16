@@ -52,10 +52,9 @@ graph LR
 ├── raw/               # 放你的原始文獻（PDF）；.gitignore 預設不上傳
 │   ├── finish/        # 已 ingest 的文獻
 │   └── assets/        # 圖片
-├── wiki/              # LLM 維護的知識頁面（初始為空）
-│   ├── index.md       # 全庫目錄
-│   └── log.md         # 異動日誌
-├── Templates/         # 各 type 頁面的 frontmatter 模板
+├── wiki/              # LLM 維護的知識頁面（初始為空，僅含 .gitkeep）
+│                      #   內容受 .gitignore 白名單保護，預設不追蹤
+├── Templates/         # 各 type 頁面模板 + index.md / log.md 空骨架
 ├── tools/
 │   └── wiki_lint.py   # 機械化健檢腳本（壞鏈/孤立/EBM 欄位/圖譜指標）
 └── docs/
@@ -69,12 +68,13 @@ graph LR
 ## 快速開始
 
 1. **Fork / 下載** 本 repo，用 Obsidian 開啟資料夾為一個 vault。
-2. 編輯 `CLAUDE.md`，替換所有 `<尖括號>` 佔位字串（vault 路徑、MinerU 路徑、日期）。
-3. （選用）依 `docs/setup-mineru.md` 安裝 PDF 提取工具。
-4. 把第一篇文獻 PDF 放進 `raw/`。
-5. 在 vault 目錄啟動 Claude Code，對它說：**「請處理 raw/你的檔名.pdf」**。
-6. LLM 會依 schema 建立 source 頁、相關 entity/concept 頁，並更新 index 與 log。
-7. 之後可隨時「請問關於 XXX…」（Query）或「請做 lint」（健檢）。
+2. **初始化 wiki**：把 `Templates/index.md`、`Templates/log.md` 複製到 `wiki/`（fresh clone 的 `wiki/` 只含 `.gitkeep`；複製後即為起始骨架）。
+3. 編輯 `CLAUDE.md`，替換所有 `<尖括號>` 佔位字串（vault 路徑、MinerU 路徑、日期）。
+4. （選用）依 `docs/setup-mineru.md` 安裝 PDF 提取工具。
+5. 把第一篇文獻 PDF 放進 `raw/`。
+6. 在 vault 目錄啟動 Claude Code，對它說：**「請處理 raw/你的檔名.pdf」**。
+7. LLM 會依 schema 建立 source 頁、相關 entity/concept 頁，並更新 index 與 log。
+8. 之後可隨時「請問關於 XXX…」（Query）或「請做 lint」（健檢）。
 
 ---
 

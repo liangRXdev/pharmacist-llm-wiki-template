@@ -13,17 +13,14 @@ output/
 *_extracted.txt
 *.tmp
 
-# ── 你的個人 wiki 內容（預設保持私有；見 DISCLAIMER.md）──
-# 若要把本資料夾當「自己的私有知識庫」用 git 備份，
-# 請改用 private repo，並移除以下註解以追蹤內容：
-wiki/source-*.md
-wiki/entity-*.md
-wiki/concept-*.md
-wiki/comparison-*.md
-wiki/synthesis-*.md
-wiki/query-*.md
-# （index.md 與 log.md 不在上方清單，預設會被追蹤——
-#   若它們也含受著作權保護的摘要，請自行加入忽略）
+# ── 你的個人 wiki 內容（白名單邏輯：預設全部忽略）──────
+# wiki/ 內所有檔案一旦 ingest 即為受著作權保護的摘要/衍生著作，
+# 預設不追蹤，杜絕誤 commit 上 public repo（見 DISCLAIMER.md）。
+# 空骨架放在 Templates/index.md、Templates/log.md，首次使用時複製進來。
+wiki/*
+!wiki/.gitkeep
+# 要把本資料夾當「私有知識庫」用 git 備份：請改用 private repo，
+# 再以 `git add -f wiki/你的檔案.md` 個別強制追蹤。
 
 # ── Obsidian / OS / 編輯器 ─────────────────────────
 .obsidian/

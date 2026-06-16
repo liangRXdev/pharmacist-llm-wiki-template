@@ -52,6 +52,50 @@ META_NODES = {"index", "log", "MEMORY", "README"}  # 不計入孤立/指標的 m
 LINK_RE = re.compile(r"\[\[\s*(?:wiki/)?([^\]\|#]+?)\s*(?:\|[^\]]*)?\]\]")
 RAW_LINK_RE = re.compile(r"\[\[\s*raw/([^\]\|#]+?)\s*(?:\|[^\]]*)?\]\]")
 
+# ---- PII 檢查（修正版：只用高精度 pattern，避免中文姓名/病歷號的海量誤報）----
+# 身分證另以檢核碼驗證 → 近乎零誤報，把遮罩從「LLM 盡力」升級為「腳本強制」。
+TWID_RE = re.compile(r"(?<![A-Za-z0-9])([A-Z])([12]\d{8})(?![0-9])")
+PHONE_RE = re.compile(r"(?<!\d)(09\d{8})(?!\d)")
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+# 台灣身分證字母對應碼（A=10 … Z=33）
+_TWID_LETTER = {c: 10 + i for i, c in enumerate("ABCDEFGHJKLMNPQRSTUVXYWZIO")}
+# 上行依「字母→數值」官方順序排列：A10 B11 C12 D13 E14 F15 G16 H17 J18 K19 L20
+# M21 N22 P23 Q24 R25 S26 T27 U28 V29 X30 Y31 W32 Z33 I34 O35
+
+
+def valid_twid(letter, digits):
+    """台灣身分證檢核碼驗證；digits 為 [12]\\d{8} 的 9 碼字串。"""
+    n = _TWID_LETTER.get(letter)
+    if n is None:
+        return False
+    total = n // 10 + (n % 10) * 9
+    weights = [8, 7, 6, 5, 4, 3, 2, 1, 1]
+    total += sum(int(d) * w for d, w in zip(digits, weights))
+    return total % 10 == 0
+
+
+def mask_pii(s):
+    """遮罩命中字串，避免 lint 報告本身洩漏未遮罩個資。"""
+    if "@" in s:                       # email：保留首字與網域尾碼
+        local, _, dom = s.partition("@")
+        return (local[0] if local else "") + "***@***" + dom[dom.rfind("."):]
+    if len(s) <= 4:
+        return s[0] + "***"
+    return s[:3] + "***" + s[-2:]
+
+
+def scan_pii(txt):
+    """回傳 [(類型, 遮罩後樣本)]；只抓高精度 pattern。"""
+    hits = []
+    for letter, digits in TWID_RE.findall(txt):
+        if valid_twid(letter, digits):
+            hits.append(("台灣身分證", mask_pii(letter + digits)))
+    for m in PHONE_RE.findall(txt):
+        hits.append(("手機號碼", mask_pii(m)))
+    for m in EMAIL_RE.findall(txt):
+        hits.append(("Email", mask_pii(m)))
+    return hits
+
 
 def parse_page(path):
     base = os.path.splitext(os.path.basename(path))[0]
@@ -226,6 +270,17 @@ def main():
                 stale.append((n, sname, datetime.date.fromtimestamp(mt).isoformat(), upd.isoformat()))
     stale.sort()
 
+    # 7. PII 強制掃描（所有 wiki 頁含 index/log；身分證經檢核碼驗證）
+    pii = []
+    for n, p in pages.items():
+        try:
+            raw_txt = open(p["path"], encoding="utf-8").read()
+        except OSError:
+            continue
+        for kind, sample in scan_pii(raw_txt):
+            pii.append((n, kind, sample))
+    pii = sorted(set(pii))
+
     # ---- 指標 ----
     nC = len(content) or 1
     metrics = {
@@ -252,7 +307,7 @@ def main():
                "fm_missing": len(fm_missing),
                "ebm_missing_study": len(ebm_missing), "ebm_missing_guideline": len(ebm_light_missing),
                "source_study": n_study, "source_guideline": n_guideline,
-               "stale": len(stale)}
+               "stale": len(stale), "pii": len(pii)}
 
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -285,6 +340,9 @@ def main():
             L.append(fmt(it))
         L.append("")
 
+    section("🔴 疑似未遮罩個資 PII（身分證已過檢核碼；手機/email 為高精度命中，請人工確認）", pii,
+            lambda x: f"- `{x[0]}`：{x[1]} → `{x[2]}`",
+            empty="無（未偵測到身分證/手機/email pattern）")
     section("🔴 壞鏈（target 不存在）", broken, lambda x: f"- `{x[0]}` → [[{x[1]}]]")
     section("🟠 孤立頁（無 content inbound）", orphans, lambda x: f"- {x}")
     section("🟠 frontmatter 缺欄", fm_missing, lambda x: f"- `{x[0]}`：缺 {', '.join(x[1])}")
