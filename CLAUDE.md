@@ -99,10 +99,24 @@ updated: YYYY-MM-DD
 
 ### 3.3 Lint（健康檢查）
 
-1. 讀取所有 wiki 頁面（建議用連結圖譜腳本，見 §七）
-2. 找出並回報：頁面間矛盾、被新文獻推翻的舊資訊、孤立頁面（無 inbound 連結）、只被提及卻無獨立頁面的重要概念、缺少交叉連結的頁面
-3. 建議應補充的新文獻方向
-4. 修正後在 `log.md` 寫入 lint 記錄
+採**兩階段**：先跑機械腳本（快、客觀），再由 LLM 做語意檢查。
+
+**Phase 1：機械檢查（`tools/wiki_lint.py`）** — 從 vault 根目錄執行：
+
+```bash
+uv run --with pyyaml python tools/wiki_lint.py
+```
+
+- 輸出報告 `output/lint-YYYY-MM-DD.md` + stdout JSON 摘要；`--json` 只印不寫檔
+- 涵蓋：壞鏈、孤立頁、單向連結、稀疏頁、frontmatter 缺欄、過期頁（raw mtime > 頁面 `updated`）
+- source 頁 EBM 欄位依型別查核（見 §六 A/B 型）+ 圖譜指標（孤立率 <5%、壞鏈率 <2%、平均出鏈 ≥5、雙向率 ≥50%）
+- 門檻常數在腳本頂部可調
+
+> ⚠️ frontmatter 陷阱：`updated:`/`created:` 等日期欄位**不可**寫成 `2026-06-02 (註: ...)` — 括號內「冒號+空格」會破壞 YAML 解析。變更原因寫進 `log.md`，日期欄位保持純日期。
+
+**Phase 2：LLM 語意檢查** — 腳本判不了的：頁面間矛盾（標 `> [!warning] 矛盾`）、被新文獻推翻的舊資訊、只被提及卻無獨立頁面的重要概念、應雙向卻單向的連結（參考 Phase 1 清單）。
+
+**Phase 3：收尾** — 機械修正（補回鏈/frontmatter/壞鏈）→ 建議新文獻方向 → 在 `log.md` 寫入 lint 記錄。
 
 ---
 
@@ -159,7 +173,10 @@ updated: YYYY-MM-DD
 
 ### EBM source 頁面最低內容要求
 
-每篇**研究型**文獻的 `source` 頁面必須包含以下欄位，缺一不可（規範/指引型文件可酌情略過 PICO/效應量欄）：
+**依來源型別套用不同欄位要求**（避免把單篇研究的 PICO/outcome 強套到 guideline）：
+
+#### (A) 單篇研究型（RCT / cohort / case-control / meta-analysis / 觀察性資料庫分析）
+必須包含以下 8 欄，缺一不可：
 
 | 欄位 | 內容要求 |
 |------|---------|
@@ -172,7 +189,21 @@ updated: YYYY-MM-DD
 | **Applicability** | 對本地臨床實務的適用性說明 |
 | **Bottom line** | 單句結論，直接可用於臨床決策 |
 
-若原始文獻資訊不足以填寫某欄位，標記 `[資訊不足]` 而非留空。
+#### (B) Guideline / 共識 / 藥物基因指引 / 工具量表 / 法規清單 / 衛教
+**不適用** PICO / Primary / Secondary outcome / RoB（單篇研究概念）。最低必備 3 欄：
+
+| 欄位 | 內容要求 |
+|------|---------|
+| **Study design** | 此處填「來源型別」：guideline / consensus / criteria / regulatory list / education 等 + 發布機構年份 |
+| **Applicability** | 對本地臨床實務的適用性 |
+| **Bottom line** | 單句可用於臨床決策的結論 |
+
+> guideline 類若採自有證據分級（COR-LOE、KDIGO 1A/2B、CPIC strength），記於 GRADE 欄或正文即可，不強制 RoB。
+
+#### 共通規則
+- 欄名中英皆可（`Study design`／研究設計、`Applicability`／適用性、`Bottom line`／單句結論）；`tools/wiki_lint.py` 已支援別名比對。
+- 資訊不足以填寫某欄位時標記 `[資訊不足]` 而非留空。
+- 型別判定：lint 腳本以 Study design 欄關鍵字自動分流（研究關鍵字→A 型查 8 欄；其餘→B 型查 3 欄）。
 
 ---
 
@@ -180,21 +211,35 @@ updated: YYYY-MM-DD
 
 ### 7.1 Ingest 用途（建立 source 頁）
 
-優先用 **MinerU** 將 PDF 轉 Markdown（表格重建品質最佳），再 Read 該 `.md` 分析。安裝與指令見 `docs/setup-mineru.md`。
+**首選工作流：分工＝pdfminer 全文正文 + Docling 逐表（關鍵表格）。** MinerU 退為「需整檔一次出、可接受黏字」的次選。
 
-原因：臨床論文關鍵數據多在表格；MinerU 的 HTML 表格輸出即使有殘餘錯誤，也比純文字易校正。常見殘餘問題：相鄰列合併、特殊符號誤判、CI 數值截斷 → 對照正文手動修正。
-
-### 7.2 MinerU 失敗時的備援：pdfminer.six
-
-MinerU 啟動失敗或 timeout 時，改用 pdfminer.six 提取純文字（快、跨平台）：
+**(A) 正文：pdfminer.six** — 敘述/建議分級等文字段落，抽全文後 Read `.txt`（快、跨平台、穩定）：
 
 ```bash
 uv run --with pdfminer.six python -c "from pdfminer.high_level import extract_text; \
 open('out.txt','w',encoding='utf-8').write(extract_text('<PDF路徑>'))"
 ```
-
 > Windows 注意：`uvx --from pdfminer.six pdf2txt.py` 無效（`.py` 非 Win32 執行檔）；須用 `uv run --with pdfminer.six python -c` 呼叫 API。
-> 備援工具產生的表格數值可信度較低 → 在 source 頁標記 `[需 MinerU 驗證]`，待 MinerU 正常後重跑確認。
+
+**(B) 關鍵臨床表格：Docling（切小檔逐表）★ 表格品質最佳**
+- **優點**：原生輸出 GFM markdown 表（可直接貼入 wiki）、欄列分明、字元與臨床閾值準確（實測勝 MinerU 的黏字、字母混淆、閾值污染）。
+- **適合時機**：劑量表、不良反應表、診斷閾值表、治療決策矩陣等高精度臨床表。
+- **限制**：CLI 多無 `--page-range`；整份大型 PDF（>~50 頁）會累積記憶體爆掉（`std::bad_alloc`）並可能拖垮整機 → **務必先用 pypdf 切小檔（每檔 3–5 頁，只含目標表格頁）再逐檔跑**；輸出表後常嵌 base64 圖片字串，以 `grep -v "data:image"` 剝除；模型載入較慢。
+
+```bash
+# Step 1：pypdf 切目標表格頁（0-based index）
+uv run --with pypdf python -c "from pypdf import PdfReader,PdfWriter; r=PdfReader('<PDF>'); w=PdfWriter(); [w.add_page(r.pages[i]) for i in range(<起>,<迄>+1)]; w.write(open('split.pdf','wb'))"
+# Step 2：對小檔跑 Docling
+docling split.pdf --to md --output <輸出目錄> --table-mode accurate
+```
+
+**(C) MinerU：整檔一次轉換（次選/備援）** — 安裝與指令見 `docs/setup-mineru.md`。其 `_content_list.json` 可快速定位每張表的頁碼（即使整份表格品質不佳，用於決定 Docling 要切哪幾頁）。HTML 表格殘餘問題：相鄰列合併、黏字、字母混淆（II↔Il）、CI 截斷 → 對照正文修正。
+
+### 7.2 失敗時的備援邏輯
+
+- **Docling `bad_alloc`**（整份崩潰）→ 確認背景進程已死 → 改切更小檔逐表 → 仍失敗則該表退 MinerU 或 pdfminer + 對照原文手動建表。
+- **MinerU 啟動失敗/殭屍進程** → 清殭屍 python 進程後重試，或改用 Docling（切小檔）抽表。
+- **兩者皆失敗** → pdfminer 抽全文正文；表格數值標記 `[需 Docling/MinerU 驗證]`，待工具正常後重跑該表確認。
 
 ### 7.3 快速查詢（非 ingest）
 

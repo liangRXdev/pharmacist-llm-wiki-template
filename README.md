@@ -13,7 +13,8 @@
 - **三流程 SOP**：Ingest（建頁）/ Query（查詢）/ Lint（健檢）
 - **EBM source 頁最低欄位要求**：強制記錄 Study design、PICO、effect size + 95% CI、RoB、GRADE、Applicability、Bottom line
 - **雙向連結知識圖譜**：source ↔ entity ↔ concept，可用 Obsidian graph view 瀏覽
-- **PDF 提取策略**：MinerU（表格品質佳）→ pdfminer.six（備援）
+- **PDF 提取策略**：pdfminer.six（全文正文）+ Docling 逐表（關鍵臨床表格，品質最佳）；MinerU 為次選/備援
+- **機械化 lint 腳本**（`tools/wiki_lint.py`）：壞鏈/孤立頁/稀疏頁/frontmatter 缺欄/過期頁 + EBM 欄位依型別查核 + 圖譜指標
 - **病患資料自動遮罩**＋**異動日誌可稽核**
 
 ---
@@ -55,9 +56,13 @@ graph LR
 │   ├── index.md       # 全庫目錄
 │   └── log.md         # 異動日誌
 ├── Templates/         # 各 type 頁面的 frontmatter 模板
+├── tools/
+│   └── wiki_lint.py   # 機械化健檢腳本（壞鏈/孤立/EBM 欄位/圖譜指標）
 └── docs/
-    └── setup-mineru.md  # MinerU / pdfminer 安裝指南
+    └── setup-mineru.md  # MinerU / pdfminer / Docling 安裝指南
 ```
+
+> Lint 用法：在 vault 根目錄執行 `uv run --with pyyaml python tools/wiki_lint.py`，產生 `output/lint-YYYY-MM-DD.md`。
 
 ---
 
