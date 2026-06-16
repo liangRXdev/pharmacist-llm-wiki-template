@@ -119,27 +119,41 @@ def parse_page(path):
             "body_chars": body_chars, "path": path}
 
 
+def file_sha256(path):
+    """回傳檔案內容 sha256（前 16 碼），失敗回 None。內容雜湊與 mtime 無關，clone/同步後穩定。"""
+    import hashlib
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 16), b""):
+                h.update(chunk)
+        return h.hexdigest()[:16]
+    except OSError:
+        return None
+
+
 def find_raw(sources, raw_dir):
-    """回傳 [(source_name, mtime or None)]，在 raw/ 遞迴搜尋（含 finish/、Literature/）。"""
+    """回傳 [(source_name, path or None)]，在 raw/ 遞迴搜尋（含 finish/、Literature/）。"""
     found = []
     search_dirs = [raw_dir]
     lit = os.path.join(os.path.dirname(raw_dir), "Literature")
     if os.path.isdir(lit):
         search_dirs.append(lit)
     for s in sources:
-        stem = os.path.splitext(str(s))[0]
+        want = os.path.basename(str(s))          # 去掉 raw/ 等路徑前綴，兩種寫法都配得到
+        stem = os.path.splitext(want)[0]
         hit = None
         for d in search_dirs:
             for root, _, files in os.walk(d):
                 for f in files:
-                    if os.path.splitext(f)[0] == stem or f == str(s):
+                    if f == want or os.path.splitext(f)[0] == stem:
                         hit = os.path.join(root, f)
                         break
                 if hit:
                     break
             if hit:
                 break
-        found.append((str(s), os.path.getmtime(hit) if hit else None))
+        found.append((str(s), hit))
     return found
 
 
@@ -222,7 +236,8 @@ def main():
     # 5b. source 頁 EBM 欄位（依來源型別查 FULL 或 LIGHT）
     ebm_missing = []   # 研究頁缺 EBM_FULL（真缺口）
     ebm_light_missing = []  # 非研究頁缺 EBM_LIGHT
-    n_study = n_guideline = 0
+    ebm_undetermined = []  # 型別無法判定（保守以 8 欄檢視，避免靜默吞缺口）
+    n_study = n_guideline = n_undetermined = 0
     for n, p in content.items():
         if p["fm"].get("type") != "source":
             continue
@@ -234,7 +249,6 @@ def main():
         title_l = str(p["fm"].get("title", "")).lower() + " " + n.lower()
         is_study = any(k in sd for k in STUDY_KW)
         is_nonstudy = any(k in sd for k in NONSTUDY_KW) or any(k in title_l for k in NONSTUDY_KW)
-        # 研究關鍵字優先；兩者皆無 → 預設 guideline（保守，不強逼 PICO）
         def field_missing(field):
             if field == "PICO":
                 if "pico" in body_l:
@@ -248,27 +262,54 @@ def main():
             miss = [f for f in EBM_FULL if field_missing(f)]
             if miss:
                 ebm_missing.append((n, miss))
-        else:
+        elif is_nonstudy and not is_study:
             n_guideline += 1
             miss = [f for f in EBM_LIGHT if field_missing(f)]
             if miss:
                 ebm_light_missing.append((n, miss))
+        else:
+            # 兩者皆無（漏填 Study design）或兩者皆中（語意衝突）→ 不靜默降級
+            # 保守以 8 欄檢視，獨立列出由人判定型別
+            n_undetermined += 1
+            miss = [f for f in EBM_FULL if field_missing(f)]
+            reason = "Study design 欄關鍵字衝突" if (is_study and is_nonstudy) else "Study design 欄缺失/無法辨識"
+            ebm_undetermined.append((n, reason, miss))
     ebm_missing.sort()
     ebm_light_missing.sort()
+    ebm_undetermined.sort()
 
-    # 6. 過期頁（raw 來源 mtime > 頁面 updated）
-    stale = []
+    # 6. 過期頁（內容雜湊：raw 來源 sha256 ≠ 頁面 frontmatter 記錄的 source_hash）
+    #    取代舊的 mtime 比對（clone/同步會重設 mtime → 假性過期）。
+    #    source_hash 格式：單一來源用字串；多來源用 {檔名: 雜湊} dict。
+    stale = []          # (頁, 來源, 現值, 記錄值)
+    hash_untracked = [] # (頁, 來源) 有 sources 但無對應 source_hash → 無法做內容過期檢查
     for n, p in content.items():
         srcs = p["fm"].get("sources") or []
         if isinstance(srcs, str):
             srcs = [srcs]
-        upd = to_date(p["fm"].get("updated"))
-        if not srcs or not upd:
+        if not srcs:
             continue
-        for sname, mt in find_raw(srcs, raw_dir):
-            if mt and datetime.date.fromtimestamp(mt) > upd:
-                stale.append((n, sname, datetime.date.fromtimestamp(mt).isoformat(), upd.isoformat()))
+        rec = p["fm"].get("source_hash")
+        def recorded_for(name):
+            base = os.path.basename(str(name))   # 去 raw/ 前綴，與 dict key 寬鬆比對
+            if isinstance(rec, dict):
+                v = (rec.get(name) or rec.get(base)
+                     or rec.get(os.path.splitext(base)[0]))
+                return None if v is None else str(v)
+            if rec not in (None, "") and len(srcs) == 1:
+                return str(rec)  # 單一來源允許純量；str() 防 YAML 把全數字雜湊當 int
+            return None
+        for sname, path in find_raw(srcs, raw_dir):
+            if not path:           # raw/ 為空（如 fresh public clone）→ 跳過，不誤判
+                continue
+            cur = file_sha256(path)
+            recv = recorded_for(sname)
+            if not recv:
+                hash_untracked.append((n, sname))
+            elif cur and cur != recv:
+                stale.append((n, sname, cur, recv))
     stale.sort()
+    hash_untracked = sorted(set(hash_untracked))
 
     # 7. PII 強制掃描（所有 wiki 頁含 index/log；身分證經檢核碼驗證）
     pii = []
@@ -306,8 +347,10 @@ def main():
                "one_way": len(one_way), "sparse": len(sparse),
                "fm_missing": len(fm_missing),
                "ebm_missing_study": len(ebm_missing), "ebm_missing_guideline": len(ebm_light_missing),
+               "ebm_undetermined": len(ebm_undetermined),
                "source_study": n_study, "source_guideline": n_guideline,
-               "stale": len(stale), "pii": len(pii)}
+               "source_undetermined": n_undetermined,
+               "stale": len(stale), "hash_untracked": len(hash_untracked), "pii": len(pii)}
 
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -346,13 +389,18 @@ def main():
     section("🔴 壞鏈（target 不存在）", broken, lambda x: f"- `{x[0]}` → [[{x[1]}]]")
     section("🟠 孤立頁（無 content inbound）", orphans, lambda x: f"- {x}")
     section("🟠 frontmatter 缺欄", fm_missing, lambda x: f"- `{x[0]}`：缺 {', '.join(x[1])}")
-    L.append(f"> EBM 分型：研究型 source {n_study} 頁（查 8 欄）、guideline/工具型 {n_guideline} 頁（查輕量 3 欄）\n")
+    L.append(f"> EBM 分型：研究型 source {n_study} 頁（查 8 欄）、guideline/工具型 {n_guideline} 頁（查輕量 3 欄）、型別待確認 {n_undetermined} 頁\n")
     section("🔴 研究型 source 缺 EBM 欄位（真缺口，應補）", ebm_missing,
             lambda x: f"- `{x[0]}`：缺 {', '.join(x[1])}")
+    section("🔴 型別待確認 source（請補 Study design 欄；暫以 8 欄檢視）", ebm_undetermined,
+            lambda x: f"- `{x[0]}`：{x[1]}" + (f"；目前缺 {', '.join(x[2])}" if x[2] else "（8 欄齊全）"))
     section("🟡 guideline/工具型 source 缺輕量欄位（Study design/Applicability/Bottom line）", ebm_light_missing,
             lambda x: f"- `{x[0]}`：缺 {', '.join(x[1])}")
-    section("🟡 過期頁（raw 來源比 updated 新）", stale,
-            lambda x: f"- `{x[0]}`：來源 {x[1]} (mtime {x[2]}) > updated {x[3]}")
+    section("🟡 過期頁（raw 來源內容雜湊 ≠ 頁面 source_hash）", stale,
+            lambda x: f"- `{x[0]}`：來源 {x[1]} 現值 {x[2]} ≠ 記錄 {x[3]} → 來源已變動，請回核並更新")
+    section("ℹ️ 未納入過期檢查（有 sources 但無 source_hash）", hash_untracked,
+            lambda x: f"- `{x[0]}`：{x[1]}（建議 ingest 時補寫 source_hash）",
+            empty="無")
     section(f"🟡 稀疏頁（正文 < {SPARSE_CHARS} 字）", sparse, lambda x: f"- `{x[0]}`（{x[1]} 字）")
     # 單向連結量大，僅報數量 + 取樣
     L.append(f"## ℹ️ 單向連結（content↔content，A→B 但 B↛A）（{len(one_way)}）\n")

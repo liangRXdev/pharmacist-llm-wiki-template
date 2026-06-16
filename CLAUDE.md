@@ -83,7 +83,7 @@ updated: YYYY-MM-DD
 
 1. 讀取原始文獻
 2. 與使用者簡短討論重點（2–3 個核心發現）
-3. 在 `wiki/` 建立 source 頁面（摘要＋重點＋方法論評估）
+3. 在 `wiki/` 建立 source 頁面（摘要＋重點＋方法論評估）；frontmatter 寫入 `source_hash`（raw 檔 sha256 前 16 碼，供 lint 內容過期檢查；多來源用 `{檔名: 雜湊}`）
 4. 識別文中實體（藥物、疾病、機制）→ 更新或新建對應 entity/concept 頁
 5. 更新 `wiki/index.md`
 6. 在 `wiki/log.md` 追加一筆 ingest 記錄
@@ -110,7 +110,7 @@ uv run --with pyyaml python tools/wiki_lint.py
 ```
 
 - 輸出報告 `output/lint-YYYY-MM-DD.md` + stdout JSON 摘要；`--json` 只印不寫檔
-- 涵蓋：壞鏈、孤立頁、單向連結、稀疏頁、frontmatter 缺欄、過期頁（raw mtime > 頁面 `updated`）
+- 涵蓋：壞鏈、孤立頁、單向連結、稀疏頁、frontmatter 缺欄、過期頁（raw 內容 sha256 ≠ 頁面 `source_hash`）、source 型別待確認、**PII 強制掃描**（身分證過檢核碼 / 手機 / email，命中即 🔴）
 - source 頁 EBM 欄位依型別查核（見 §六 A/B 型）+ 圖譜指標（孤立率 <5%、壞鏈率 <2%、平均出鏈 ≥5、雙向率 ≥50%）
 - 門檻常數在腳本頂部可調
 

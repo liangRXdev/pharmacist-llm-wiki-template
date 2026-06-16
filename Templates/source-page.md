@@ -3,6 +3,7 @@ title: <文獻標題>
 type: source
 tags: [<主題>, <藥物>, <指引或試驗名>]
 sources: [raw/<原始檔名>.pdf]
+source_hash: <ingest 時填入 raw 檔 sha256 前16碼；多來源用 {檔名: 雜湊}>
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
