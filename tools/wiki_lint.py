@@ -167,6 +167,81 @@ def to_date(v):
     return None
 
 
+# ---- EBM 分型（純函式，可單元測試）----
+def ebm_field_missing(field, body):
+    """指定 EBM 欄位在正文 body 中是否缺失。"""
+    body_l = body.lower()
+    if field == "PICO":
+        if "pico" in body_l:
+            return False
+        # 結構式 P/I/C/O（表格列或粗體標記，如 | **P** | ...）
+        pcs = set(re.findall(r"\*\*\s*([PICO])\s*\*\*", body))
+        return not pcs >= {"P", "I", "C", "O"}
+    return not any(a in body_l for a in EBM_ALIASES[field])
+
+
+def classify_source(page):
+    """判定 source 頁 EBM 型別與缺欄。非 source 頁回 None。
+    回傳 {category: 'study'|'guideline'|'undetermined', missing: [...], reason: str|None}。
+    - study：Study design 欄含研究關鍵字 → 查 EBM_FULL（8 欄）
+    - guideline：含非研究線索（含標題）→ 查 EBM_LIGHT（3 欄）
+    - undetermined：型別無法判定/關鍵字衝突 → 不靜默降級，以 8 欄檢視交人判定
+    """
+    if page["fm"].get("type") != "source":
+        return None
+    body = page["body"]
+    sm = re.search(r"study design[^\n|]*[|:：]\s*([^\n|]+)", body, re.I)
+    sd = sm.group(1).lower() if sm else ""
+    title_l = str(page["fm"].get("title", "")).lower() + " " + page["name"].lower()
+    is_study = any(k in sd for k in STUDY_KW)
+    is_nonstudy = any(k in sd for k in NONSTUDY_KW) or any(k in title_l for k in NONSTUDY_KW)
+    if is_study and not is_nonstudy:
+        miss = [f for f in EBM_FULL if ebm_field_missing(f, body)]
+        return {"category": "study", "missing": miss, "reason": None}
+    if is_nonstudy and not is_study:
+        miss = [f for f in EBM_LIGHT if ebm_field_missing(f, body)]
+        return {"category": "guideline", "missing": miss, "reason": None}
+    miss = [f for f in EBM_FULL if ebm_field_missing(f, body)]
+    reason = "Study design 欄關鍵字衝突" if (is_study and is_nonstudy) else "Study design 欄缺失/無法辨識"
+    return {"category": "undetermined", "missing": miss, "reason": reason}
+
+
+# ---- 過期檢查（純函式，可單元測試）----
+def recorded_hash_for(name, rec, n_sources):
+    """從 frontmatter 的 source_hash（rec）取出 name 對應的記錄雜湊；回 str 或 None。
+    rec 可為 dict（多來源 {檔名: 雜湊}）或純量（單一來源）。"""
+    base = os.path.basename(str(name))   # 去 raw/ 前綴，與 dict key 寬鬆比對
+    if isinstance(rec, dict):
+        v = rec.get(name) or rec.get(base) or rec.get(os.path.splitext(base)[0])
+        return None if v is None else str(v)
+    if rec not in (None, "") and n_sources == 1:
+        return str(rec)  # 單一來源允許純量；str() 防 YAML 把全數字雜湊當 int
+    return None
+
+
+def check_stale(page, raw_dir):
+    """檢查單頁來源是否過期。回傳 (stale, untracked)：
+      stale = [(來源, 現值, 記錄值)]；untracked = [來源]（有 sources 但無對應 source_hash）。
+    raw 缺檔（fresh public clone）→ 跳過不計。"""
+    srcs = page["fm"].get("sources") or []
+    if isinstance(srcs, str):
+        srcs = [srcs]
+    if not srcs:
+        return [], []
+    rec = page["fm"].get("source_hash")
+    stale, untracked = [], []
+    for sname, path in find_raw(srcs, raw_dir):
+        if not path:           # raw/ 為空 → 跳過，不誤判
+            continue
+        cur = file_sha256(path)
+        recv = recorded_hash_for(sname, rec, len(srcs))
+        if not recv:
+            untracked.append(sname)
+        elif cur and cur != recv:
+            stale.append((sname, cur, recv))
+    return stale, untracked
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--wiki", default="wiki")
@@ -239,41 +314,21 @@ def main():
     ebm_undetermined = []  # 型別無法判定（保守以 8 欄檢視，避免靜默吞缺口）
     n_study = n_guideline = n_undetermined = 0
     for n, p in content.items():
-        if p["fm"].get("type") != "source":
+        res = classify_source(p)
+        if res is None:
             continue
-        body_l = p["body"].lower()
-        sd = ""
-        sm = re.search(r"study design[^\n|]*[|:：]\s*([^\n|]+)", p["body"], re.I)
-        if sm:
-            sd = sm.group(1).lower()
-        title_l = str(p["fm"].get("title", "")).lower() + " " + n.lower()
-        is_study = any(k in sd for k in STUDY_KW)
-        is_nonstudy = any(k in sd for k in NONSTUDY_KW) or any(k in title_l for k in NONSTUDY_KW)
-        def field_missing(field):
-            if field == "PICO":
-                if "pico" in body_l:
-                    return False
-                # 結構式 P/I/C/O（表格列或粗體標記，如 | **P** | ...）
-                pcs = set(re.findall(r"\*\*\s*([PICO])\s*\*\*", p["body"]))
-                return not pcs >= {"P", "I", "C", "O"}
-            return not any(a in body_l for a in EBM_ALIASES[field])
-        if is_study and not is_nonstudy:
+        if res["category"] == "study":
             n_study += 1
-            miss = [f for f in EBM_FULL if field_missing(f)]
-            if miss:
-                ebm_missing.append((n, miss))
-        elif is_nonstudy and not is_study:
+            if res["missing"]:
+                ebm_missing.append((n, res["missing"]))
+        elif res["category"] == "guideline":
             n_guideline += 1
-            miss = [f for f in EBM_LIGHT if field_missing(f)]
-            if miss:
-                ebm_light_missing.append((n, miss))
+            if res["missing"]:
+                ebm_light_missing.append((n, res["missing"]))
         else:
-            # 兩者皆無（漏填 Study design）或兩者皆中（語意衝突）→ 不靜默降級
-            # 保守以 8 欄檢視，獨立列出由人判定型別
+            # 型別待確認：不靜默降級，無論缺欄與否都列出由人判定
             n_undetermined += 1
-            miss = [f for f in EBM_FULL if field_missing(f)]
-            reason = "Study design 欄關鍵字衝突" if (is_study and is_nonstudy) else "Study design 欄缺失/無法辨識"
-            ebm_undetermined.append((n, reason, miss))
+            ebm_undetermined.append((n, res["reason"], res["missing"]))
     ebm_missing.sort()
     ebm_light_missing.sort()
     ebm_undetermined.sort()
@@ -284,30 +339,9 @@ def main():
     stale = []          # (頁, 來源, 現值, 記錄值)
     hash_untracked = [] # (頁, 來源) 有 sources 但無對應 source_hash → 無法做內容過期檢查
     for n, p in content.items():
-        srcs = p["fm"].get("sources") or []
-        if isinstance(srcs, str):
-            srcs = [srcs]
-        if not srcs:
-            continue
-        rec = p["fm"].get("source_hash")
-        def recorded_for(name):
-            base = os.path.basename(str(name))   # 去 raw/ 前綴，與 dict key 寬鬆比對
-            if isinstance(rec, dict):
-                v = (rec.get(name) or rec.get(base)
-                     or rec.get(os.path.splitext(base)[0]))
-                return None if v is None else str(v)
-            if rec not in (None, "") and len(srcs) == 1:
-                return str(rec)  # 單一來源允許純量；str() 防 YAML 把全數字雜湊當 int
-            return None
-        for sname, path in find_raw(srcs, raw_dir):
-            if not path:           # raw/ 為空（如 fresh public clone）→ 跳過，不誤判
-                continue
-            cur = file_sha256(path)
-            recv = recorded_for(sname)
-            if not recv:
-                hash_untracked.append((n, sname))
-            elif cur and cur != recv:
-                stale.append((n, sname, cur, recv))
+        s_list, u_list = check_stale(p, raw_dir)
+        stale.extend((n, sname, cur, recv) for sname, cur, recv in s_list)
+        hash_untracked.extend((n, sname) for sname in u_list)
     stale.sort()
     hash_untracked = sorted(set(hash_untracked))
 

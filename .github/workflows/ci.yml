@@ -1,0 +1,32 @@
+name: CI
+
+# 機械健檢：回歸測試 + wiki_lint 摘要。
+# lint 一律用 --json 模式：只印數量摘要、不寫 output/、不外洩頁面內容（PII 安全）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # tests/ 用了 `dict | None` 等 3.10+ 語法 → 釘下限，避免 3.9 runner TypeError
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run regression tests
+        run: uv run --with pyyaml --with pytest pytest -q
+
+      # --json：CI log 只見數量摘要，不含頁面正文 → public repo 不洩 PII。
+      # 注意：勿在 CI 改用完整報告模式，否則 output/lint-*.md 可能被當 artifact 上傳。
+      - name: Wiki lint (summary only)
+        run: uv run --with pyyaml python tools/wiki_lint.py --json
