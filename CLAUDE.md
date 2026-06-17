@@ -150,6 +150,8 @@ uv run --with pyyaml python tools/wiki_lint.py
 
 ## 五、log.md 格式規則（方便 grep 篩選）
 
+合法動作（`動作` 欄）：`ingest`（建頁）、`query`（查詢存檔）、`lint`（健檢）、`tooling`（工具鏈/工程改動，如 lint 腳本、測試、CI）。
+
 ```
 ## [YYYY-MM-DD] ingest | 文獻標題
 - 新建頁面：wiki/XXX.md, wiki/YYY.md
@@ -162,6 +164,9 @@ uv run --with pyyaml python tools/wiki_lint.py
 - 修正矛盾：N 處
 - 新增連結：M 處
 - 孤立頁面處理：K 頁
+
+## [YYYY-MM-DD] tooling | 工程改動摘要
+- 變更：tools/wiki_lint.py、tests/、.github/workflows/ 等（非臨床內容）
 ```
 
 ---
