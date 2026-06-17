@@ -57,6 +57,10 @@ graph LR
 ├── Templates/         # 各 type 頁面模板 + index.md / log.md 空骨架
 ├── tools/
 │   └── wiki_lint.py   # 機械化健檢腳本（壞鏈/孤立/EBM 欄位/圖譜指標）
+├── tests/
+│   └── test_wiki_lint.py  # wiki_lint 回歸測試（pytest）
+├── .github/workflows/
+│   └── ci.yml         # GitHub Actions：push/PR 跑測試 + lint 摘要
 └── docs/
     └── setup-mineru.md  # MinerU / pdfminer / Docling 安裝指南
 ```
@@ -75,6 +79,29 @@ graph LR
 6. 在 vault 目錄啟動 Claude Code，對它說：**「請處理 raw/你的檔名.pdf」**。
 7. LLM 會依 schema 建立 source 頁、相關 entity/concept 頁，並更新 index 與 log。
 8. 之後可隨時「請問關於 XXX…」（Query）或「請做 lint」（健檢）。
+
+---
+
+## 開發 / 測試（選用）
+
+`tools/wiki_lint.py` 附帶 pytest 回歸測試，並由 GitHub Actions 在每次 push / PR 自動執行。一般使用者**不需理會**；僅在你要修改 lint 腳本時相關。
+
+**本機跑測試**（在 repo 根目錄）：
+
+```bash
+uv run --with pyyaml --with pytest pytest -q
+```
+
+涵蓋三大類：身分證檢核碼 / PII 遮罩、來源內容雜湊過期偵測、EBM 型別分流（study / guideline / 型別待確認）。
+
+**CI（GitHub Actions，`.github/workflows/ci.yml`）**：
+
+- 觸發：push 到 `main`、對 `main` 的 PR、手動（workflow_dispatch）
+- 內容：跑 `pytest -q`，再跑 `wiki_lint.py --json` 做煙霧測試
+- lint 固定用 **`--json` 摘要模式**：只輸出數量統計，**不寫 `output/`、不外洩任何頁面內容** → 即使在 public repo 也不會洩漏受著作權保護的摘要或病患資料
+- 結果可在 repo 的 **Actions** 分頁查看（綠勾＝健檢通過）
+
+> 修改 `wiki_lint.py` 後，若改動了 `--json` 摘要的欄位名稱（如 `stale`、`hash_untracked`），對應測試會變紅——這是刻意的 contract test，請同步更新測試斷言。
 
 ---
 
