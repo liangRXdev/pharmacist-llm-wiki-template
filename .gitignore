@@ -22,6 +22,11 @@ wiki/*
 # 要把本資料夾當「私有知識庫」用 git 備份：請改用 private repo，
 # 再以 `git add -f wiki/你的檔案.md` 個別強制追蹤。
 
+# ── Python（lint 腳本與測試）────────────────────────
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # ── Obsidian / OS / 編輯器 ─────────────────────────
 .obsidian/
 .DS_Store
