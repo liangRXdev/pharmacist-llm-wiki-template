@@ -1,6 +1,7 @@
 # 藥師 LLM 知識庫模板（Pharmacist LLM Wiki Template）
 
 > 一套用 **Claude Code（或任何 LLM Agent）+ Obsidian** 建立、維護個人臨床藥學實證知識庫的**工作流程與 schema**。
+> 「一個臨床藥師在 2 分鐘內，把零散的 guideline / 文獻，透過 Coding Agent 變成可維護的實證藥學Wiki。」
 > 本 repo 只提供「方法與骨架」，**不含任何臨床內容**——文獻摘要由你自己 ingest 產生。
 
 ---
