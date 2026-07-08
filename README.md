@@ -19,6 +19,53 @@
 
 ---
 
+## 30 秒看懂工作流程
+
+> 以下為**虛構示意範例**（fictional / illustrative），檔名與頁面皆為佔位符，不含任何真實臨床內容或建議。
+
+**Before** — 把一篇文獻 PDF 放進 `raw/`：
+
+```text
+raw/
+└── example-source.pdf
+```
+
+**你只要說一句話：**
+
+```text
+請處理 raw/example-source.pdf
+```
+
+**Claude Code 會依 `CLAUDE.md` schema 自動：**
+
+1. 判定來源型別（RCT / meta-analysis / guideline / …）
+2. 依型別提取 EBM 欄位（Study design、PICO、GRADE、Bottom line…）
+3. 建立 source 摘要頁
+4. 新建或更新相關 entity / concept 頁並建立雙向連結
+5. 更新 `wiki/index.md`（全庫目錄）
+6. 在 `wiki/log.md` 追加異動記錄
+7. （若你要求）順帶跑 lint 健檢
+
+**After** — `wiki/` 長出互相連結的頁面：
+
+```text
+wiki/
+├── source-example-source.md      ← 文獻摘要 + EBM 欄位
+├── entity-drug-x.md              ← 藥物實體頁（連結節點）
+├── concept-clinical-topic-y.md   ← 概念/機制頁
+├── index.md                      ← 已更新
+└── log.md                        ← 已追加記錄
+```
+
+**Then** — 之後可隨時查詢或健檢：
+
+```text
+請問這篇文獻對 topic Y 的臨床意義是什麼？   ← Query
+請做 lint                                  ← Lint
+```
+
+---
+
 ## 知識圖譜長這樣
 
 文獻經 ingest 後，會織成 source ↔ entity ↔ concept 互連的網絡（以下為**示意**，節點皆為佔位範例，不含臨床內容）：
