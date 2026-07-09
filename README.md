@@ -93,7 +93,7 @@ graph LR
 
 ```
 .
-├── CLAUDE.md          # LLM 操作規範（schema）— 使用前替換 <尖括號> 佔位字串
+├── CLAUDE.md          # LLM 操作規範（schema）— 開箱即用；僅 §六 領域規則可選用改寫
 ├── DISCLAIMER.md      # 臨床免責 + 著作權聲明（務必閱讀）
 ├── LICENSE            # 方法/模板採 MIT；你的文獻摘要內容不在授權範圍
 ├── raw/               # 放你的原始文獻（PDF）；.gitignore 預設不上傳
@@ -126,8 +126,10 @@ graph LR
 
 1. **Fork / 下載** 本 repo，用 Obsidian 開啟資料夾為一個 vault。
 2. **初始化 wiki**：把 `Templates/index.md`、`Templates/log.md` 複製到 `wiki/`（fresh clone 的 `wiki/` 只含 `.gitkeep`；複製後即為起始骨架）。
-3. 編輯 `CLAUDE.md`，替換所有 `<尖括號>` 佔位字串（vault 路徑、MinerU 路徑、日期）。
-4. （選用）依 `docs/setup-mineru.md` 安裝 PDF 提取工具。
+3. （選用）若你不在台灣、不需要健保給付與多語藥物標籤規則，改寫 `CLAUDE.md` §六領域特殊規則。
+   其餘部分開箱即用，**不需要做任何字串取代**。
+4. （選用）僅在文獻的**表格特別關鍵**時，才依 `docs/setup-mineru.md` 安裝 PDF 提取工具；
+   一般 ingest 由 `uv` 即時取用 pdfminer，無須預裝。
 5. 把第一篇文獻 PDF 放進 `raw/`。
 6. 在 vault 目錄啟動 Claude Code，對它說：**「請處理 raw/你的檔名.pdf」**。
 7. LLM 會依 schema 建立 source 頁、相關 entity/concept 頁，並更新 index 與 log。

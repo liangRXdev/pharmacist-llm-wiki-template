@@ -38,7 +38,9 @@ uv pip install --python <你的工具目錄>/mineru-env -U "mineru[pipeline]"
 
 - 輸出：`<輸出目錄>/mineru/<檔名>/auto/<檔名>.md`
 - `-l`：原文語言（`en`、`ch` 等）；中英混排文件實測 `-l en` 對英文藥名/數據較穩
-- 在 `CLAUDE.md` 把 `<MINERU_PATH>` 替換為實際執行檔路徑
+- `<MINERU_PATH>` 即上一步 `uv venv` 建出的環境內執行檔位置
+  （Windows：`<你的工具目錄>\mineru-env\Scripts\`；macOS/Linux：`<你的工具目錄>/mineru-env/bin/`）。
+  **不需要改 `CLAUDE.md`**——請 Claude Code 跑 MinerU 時，把完整路徑一併告訴它即可。
 
 **常見殘餘問題與處理**：
 - 相鄰列合併 → 對照 Results 文字手動拆列
