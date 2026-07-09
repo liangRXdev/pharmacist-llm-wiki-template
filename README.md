@@ -109,7 +109,8 @@ graph LR
 ├── .github/workflows/
 │   └── ci.yml         # GitHub Actions：push/PR 跑測試 + lint 摘要
 └── docs/
-    └── setup-mineru.md  # MinerU / pdfminer / Docling 安裝指南
+    ├── quickstart-for-clinical-pharmacists.md  # 新手 Quick Start（不寫程式者從這裡開始）
+    └── setup-mineru.md                         # MinerU / pdfminer / Docling 安裝指南
 ```
 
 > Lint 用法：在 vault 根目錄執行 `uv run --with pyyaml python tools/wiki_lint.py`，產生 `output/lint-YYYY-MM-DD.md`。
@@ -117,6 +118,11 @@ graph LR
 ---
 
 ## 快速開始
+
+> 🩺 **不寫程式的臨床藥師請走這裡**：[**新手 Quick Start**](docs/quickstart-for-clinical-pharmacists.md)
+> ——只回答四件事：安裝什麼、文獻怎麼放、怎麼對 Claude Code 下指令、如何確認沒出錯也沒洩漏資料。
+>
+> 以下為工程使用者的濃縮版，步驟相同。
 
 1. **Fork / 下載** 本 repo，用 Obsidian 開啟資料夾為一個 vault。
 2. **初始化 wiki**：把 `Templates/index.md`、`Templates/log.md` 複製到 `wiki/`（fresh clone 的 `wiki/` 只含 `.gitkeep`；複製後即為起始骨架）。
