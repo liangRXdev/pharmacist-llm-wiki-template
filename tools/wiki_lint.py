@@ -42,11 +42,17 @@ STUDY_KW = ["rct", "randomi", "randomized", "cohort", "case-control", "case cont
             "meta-analysis", "meta analysis", "pooled", "post hoc", "post-hoc",
             "cross-sectional", "observational", "隨機", "世代", "病例對照",
             "統合分析", "前瞻", "回溯", "觀察性", "次級分析"]
-# 非研究型線索（guideline/共識/工具/法規/衛教）→ 查 EBM_LIGHT
+# 非研究型線索（guideline/共識/工具/法規/衛教/敘述回顧）→ 查 EBM_LIGHT
+# narrative review 類務必列入：其 Study design 欄常出現「非 systematic review / meta-analysis」
+# 這類否定句，或「以 XXX 之 meta-analysis 為引用依據」這類**他篇**論文的設計。
+# 兩者都會讓 STUDY_KW 的子字串比對誤命中（比對器不懂否定，也不懂引用語境）。
 NONSTUDY_KW = ["guideline", "指引", "consensus", "共識", "cpic", "criteria", "準則",
                "beers", "stopp", "start", "清單", "prohibited list", "list",
                "手冊", "manual", "education", "衛教", "量表", "scale", "standards of care",
-               "建議", "recommendation", "專書", "照護"]
+               "建議", "recommendation", "專書", "照護",
+               "narrative review", "seminar", "敘述回顧", "敘述性回顧", "敘事性回顧",
+               "綜論", "專家意見", "expert opinion"]
+SD_WINDOW = 300             # 「## Study design」獨立標題寫法：取區段開頭幾個字元判型
 SPARSE_CHARS = 500          # 正文非空白字元數低於此 → 稀疏
 META_NODES = {"index", "log", "MEMORY", "README"}  # 不計入孤立/指標的 meta 檔
 LINK_RE = re.compile(r"\[\[\s*(?:wiki/)?([^\]\|#]+?)\s*(?:\|[^\]]*)?\]\]")
@@ -180,30 +186,72 @@ def ebm_field_missing(field, body):
     return not any(a in body_l for a in EBM_ALIASES[field])
 
 
+def extract_study_design(body):
+    """取出 Study design 欄的文字（小寫）。抓不到回空字串。
+
+    兩種寫法都要吃得到，否則 8 欄檢查會靜默失效：
+      1. 同一行帶冒號或表格列：`**Study design**：多中心雙盲 RCT` / `| Study design | RCT |`
+      2. 獨立標題 + 內容在下一行：
+             ## Study design
+
+             - **類型**：多中心、雙盲、1:1 隨機分派 RCT
+    寫法 2 只取該區段開頭 SD_WINDOW 字元——視窗過大會吞入後續段落的引用與否定句。
+    """
+    sm = re.search(r"study design[^\n|]*[|:：]\s*([^\n|]+)", body, re.I)
+    if sm:
+        return sm.group(1).lower()
+    alias_re = "|".join(re.escape(a) for a in EBM_ALIASES["Study design"])
+    hm = re.search(rf"^#{{1,6}}\s*(?:{alias_re})\s*$", body, re.I | re.M)
+    if not hm:
+        return ""
+    sect = body[hm.end():]
+    nxt = re.search(r"^#{1,6}\s", sect, re.M)
+    return (sect[:nxt.start()] if nxt else sect)[:SD_WINDOW].lower()
+
+
+def _first_kw_pos(text, keywords):
+    """回傳最早命中的關鍵字位置；皆未命中回 None。"""
+    hits = [text.index(k) for k in keywords if k in text]
+    return min(hits) if hits else None
+
+
 def classify_source(page):
     """判定 source 頁 EBM 型別與缺欄。非 source 頁回 None。
     回傳 {category: 'study'|'guideline'|'undetermined', missing: [...], reason: str|None}。
     - study：Study design 欄含研究關鍵字 → 查 EBM_FULL（8 欄）
     - guideline：含非研究線索（含標題）→ 查 EBM_LIGHT（3 欄）
     - undetermined：型別無法判定/關鍵字衝突 → 不靜默降級，以 8 欄檢視交人判定
+
+    兩類關鍵字同時出現於 Study design 欄時，採**位置規則**：先出現者宣告型別。
+    理由：設計宣告寫在最前面，其後提到的研究設計多半是「引用他篇」或「否定自身」，
+    例如「敘述回顧；以 XXX 之 meta-analysis 為引用依據」——meta-analysis 屬於被引的那篇。
+    反之若研究關鍵字在前（如 `randomized controlled guideline`），語義真的衝突 → 不選邊。
     """
     if page["fm"].get("type") != "source":
         return None
     body = page["body"]
-    sm = re.search(r"study design[^\n|]*[|:：]\s*([^\n|]+)", body, re.I)
-    sd = sm.group(1).lower() if sm else ""
+    sd = extract_study_design(body)
     title_l = str(page["fm"].get("title", "")).lower() + " " + page["name"].lower()
-    is_study = any(k in sd for k in STUDY_KW)
-    is_nonstudy = any(k in sd for k in NONSTUDY_KW) or any(k in title_l for k in NONSTUDY_KW)
+
+    study_pos = _first_kw_pos(sd, STUDY_KW)
+    nonstudy_pos = _first_kw_pos(sd, NONSTUDY_KW)
+    is_study = study_pos is not None
+    is_nonstudy = nonstudy_pos is not None or any(k in title_l for k in NONSTUDY_KW)
+
+    def _full():
+        return [f for f in EBM_FULL if ebm_field_missing(f, body)]
+
     if is_study and not is_nonstudy:
-        miss = [f for f in EBM_FULL if ebm_field_missing(f, body)]
-        return {"category": "study", "missing": miss, "reason": None}
+        return {"category": "study", "missing": _full(), "reason": None}
     if is_nonstudy and not is_study:
         miss = [f for f in EBM_LIGHT if ebm_field_missing(f, body)]
         return {"category": "guideline", "missing": miss, "reason": None}
-    miss = [f for f in EBM_FULL if ebm_field_missing(f, body)]
+    if is_study and is_nonstudy and nonstudy_pos is not None and nonstudy_pos < study_pos:
+        # 非研究型設計宣告在前 → 其後的研究關鍵字是引用或否定，不是本頁的設計
+        miss = [f for f in EBM_LIGHT if ebm_field_missing(f, body)]
+        return {"category": "guideline", "missing": miss, "reason": None}
     reason = "Study design 欄關鍵字衝突" if (is_study and is_nonstudy) else "Study design 欄缺失/無法辨識"
-    return {"category": "undetermined", "missing": miss, "reason": reason}
+    return {"category": "undetermined", "missing": _full(), "reason": reason}
 
 
 # ---- 過期檢查（純函式，可單元測試）----

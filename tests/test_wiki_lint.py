@@ -260,6 +260,92 @@ class TestClassifySourceUnit:
         assert "PICO" not in res["missing"]
 
 
+class TestStudyDesignExtraction:
+    """回歸：`## Study design` 獨立標題寫法必須被辨識。
+
+    修正前只認「同一行帶冒號」與表格列；獨立標題寫法會抓不到 → sd 為空 →
+    落入 undetermined/guideline，**8 欄檢查靜默失效**。
+    """
+
+    def test_inline_colon_style(self):
+        assert "rct" in wiki_lint.extract_study_design("**Study design**：多中心雙盲 RCT")
+
+    def test_table_row_style(self):
+        assert "rct" in wiki_lint.extract_study_design("| Study design | 多中心雙盲 RCT |")
+
+    def test_heading_then_next_line_style(self):
+        body = "## Study design\n\n- **類型**：多中心、雙盲、1:1 隨機分派 RCT\n\n## PICO\n"
+        assert "隨機" in wiki_lint.extract_study_design(body)
+
+    def test_heading_style_classified_as_study(self):
+        body = ("## Study design\n\n- **類型**：多中心、雙盲、1:1 隨機分派 RCT\n\n"
+                "## PICO\n略\n")
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "study"
+
+    def test_heading_stops_at_next_section(self):
+        # 下一個標題之後的內容不得被吸入判型視窗
+        body = "## Study design\n\n敘述回顧\n\n## Primary outcome\n\nRCT pooled 隨機\n"
+        assert "rct" not in wiki_lint.extract_study_design(body)
+
+    def test_chinese_alias_heading(self):
+        body = "## 來源型別\n\n受邀綜論（invited narrative review）\n"
+        assert "綜論" in wiki_lint.extract_study_design(body)
+
+
+class TestNarrativeReviewNotMisclassified:
+    """回歸：narrative review 的 Study design 欄常含否定句或他篇論文的設計。
+
+    子字串比對不懂否定、也不懂引用語境，修正前這三種寫法都會被誤判為單篇研究，
+    進而逼使作者為一篇綜論補寫**不存在的** primary/secondary outcome。
+    """
+
+    def test_negated_meta_analysis_is_guideline(self):
+        # 「無 meta-analysis」——否定句
+        body = "| Study design | Seminar（系統性敘述回顧 + 專家意見）；無 meta-analysis |"
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "guideline"
+
+    def test_negated_systematic_review_is_guideline(self):
+        # 「非 systematic review / meta-analysis」——否定句
+        body = "| Study design | Narrative review（非 systematic review / meta-analysis）|"
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "guideline"
+
+    def test_citing_other_papers_meta_analysis_is_guideline(self):
+        # 引用的是**他篇**論文的設計；本頁仍是敘述回顧
+        body = "| Study design | 敘述回顧；以 Author 2017 之 meta-analysis 為主要引用依據 |"
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "guideline"
+
+    def test_narrative_review_checked_with_light_fields_only(self):
+        # 綜論不應被要求 PICO / Primary outcome / RoB
+        body = ("| Study design | 受邀綜論（invited narrative review）|\n"
+                "Applicability：台灣適用。Bottom line：一句話結論。")
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "guideline"
+        assert res["missing"] == []
+
+    def test_study_keyword_first_still_conflicts(self):
+        # 位置規則的另一側：研究關鍵字在前 → 語義真衝突 → 不選邊，交人判定
+        body = "| Study design | randomized controlled guideline |"
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "undetermined"
+        assert "衝突" in res["reason"]
+
+    def test_true_systematic_review_still_study(self):
+        # 不可因新增關鍵字而把真正的 SR/MA 打成 guideline
+        body = "| Study design | 系統性回顧 + statistical meta-analysis（僅納入 RCT）|"
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "study"
+
+    def test_guideline_citing_rct_evidence_is_guideline(self):
+        # guideline 宣告在前、其後提到納入的 RCT → 仍是 guideline
+        body = "| Study design | clinical practice guideline + systematic review of RCTs |"
+        res = wiki_lint.classify_source(make_page(body))
+        assert res["category"] == "guideline"
+
+
 class TestCheckStaleUnit:
     def _hash(self, data):
         return hashlib.sha256(data).hexdigest()[:16]
