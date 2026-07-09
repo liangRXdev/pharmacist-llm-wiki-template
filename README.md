@@ -36,10 +36,12 @@ raw/
 請處理 raw/example-source.pdf
 ```
 
-**Claude Code 會依 `CLAUDE.md` schema 自動：**
+**Claude Code 會依 `CLAUDE.md` schema，在你確認重點後協助：**
 
 1. 判定來源型別（RCT / meta-analysis / guideline / …）
-2. 依型別提取 EBM 欄位（Study design、PICO、GRADE、Bottom line…）
+2. 依來源型別提取 EBM 欄位
+   - 研究型：PICO、effect size、95% CI、RoB、GRADE、Applicability、Bottom line
+   - Guideline / narrative review 類：來源型別、發布機構年份、Applicability、Bottom line
 3. 建立 source 摘要頁
 4. 新建或更新相關 entity / concept 頁並建立雙向連結
 5. 更新 `wiki/index.md`（全庫目錄）
