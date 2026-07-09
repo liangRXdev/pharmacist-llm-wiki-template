@@ -49,9 +49,11 @@ def write_vault(tmp_path, pages: dict, raw: dict | None = None):
 
 def run_lint(vault: Path) -> dict:
     """以 vault 為 cwd 跑 wiki_lint.py --json，回傳解析後的摘要 dict。"""
+    # encoding 必須明指 utf-8：Windows 的 text=True 預設走 locale 編碼（cp950），
+    # 遇到腳本輸出的中文指標名會 UnicodeDecodeError，stdout 變成 None。
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--json"],
-        cwd=str(vault), capture_output=True, text=True,
+        cwd=str(vault), capture_output=True, text=True, encoding="utf-8",
     )
     assert proc.returncode == 0, f"lint 非零退出：\n{proc.stderr}"
     return json.loads(proc.stdout)
@@ -291,6 +293,90 @@ class TestStudyDesignExtraction:
     def test_chinese_alias_heading(self):
         body = "## 來源型別\n\n受邀綜論（invited narrative review）\n"
         assert "綜論" in wiki_lint.extract_study_design(body)
+
+    def test_heading_with_suffix(self):
+        # `## Study Design / 文件性質` —— 別名不獨佔整行時仍須辨識
+        body = "## Study Design / 文件性質\n\n多中心雙盲 RCT\n"
+        assert "rct" in wiki_lint.extract_study_design(body)
+
+    def test_numbered_heading(self):
+        # `### 1. Study Design` —— 帶編號前綴
+        body = "### 1. Study Design\n\n多中心雙盲 RCT\n"
+        assert "rct" in wiki_lint.extract_study_design(body)
+
+    def test_chinese_alias_table_row(self):
+        # 表格列的中文別名（修正前行內比對寫死英文 study design，抓不到）
+        body = "| 文件性質 | 年度更新摘要（Summary of Changes），非全文指引 |"
+        assert "指引" in wiki_lint.extract_study_design(body)
+
+    def test_heading_wins_over_rob_domain_row(self):
+        # RoB 表常以 `研究設計` 為 domain 列名；行內比對會抓到評等而非設計。
+        # 頁面若有 Study design 標題，標題才是權威。
+        body = ("## Study Design\n\n橫斷面次級分析（cross-sectional）\n\n"
+                "## RoB Tool\n\n| 研究設計 | 🟡 Some | 橫斷面，無法確認因果 |\n")
+        sd = wiki_lint.extract_study_design(body)
+        assert "cross-sectional" in sd
+        assert "some" not in sd
+
+
+class TestTitleIsOnlyFallback:
+    """回歸：標題的非研究字樣不得否決 Study design 欄裡明寫的研究設計。
+
+    量表驗證研究的標題常含「量表 / scale」，meta-analysis 的標題常含「建議」，
+    修正前這些頁會被標題拖成 undetermined 或 guideline。
+    """
+
+    def test_title_nonstudy_does_not_veto_explicit_study_design(self):
+        body = "| Study design | 橫斷面研究（cross-sectional）|"
+        res = wiki_lint.classify_source(make_page(body, {"title": "抗膽鹼負荷量表驗證"}))
+        assert res["category"] == "study"
+
+    def test_title_nonstudy_still_used_when_sd_has_no_study_kw(self):
+        body = "| Study design | 學會發布之照護建議 |"
+        res = wiki_lint.classify_source(
+            make_page(body, {"title": "COPD 診療指引 2023"}))
+        assert res["category"] == "guideline"
+
+
+class TestNoGenericKeywordFalsePositives:
+    """回歸：NONSTUDY_KW 不得含會在一般敘述/英文單字內部命中的泛用詞。
+
+    修正前 `照護`（長期照護機構）、`準則`（診斷準則）、`建議`、
+    `scale` / `list` / `start` 會在單篇研究的 Study design 欄裡假命中，製造假衝突。
+    """
+
+    @pytest.mark.parametrize("junk", ["照護", "建議", "準則", "scale", "list", "start"])
+    def test_junk_keyword_removed(self, junk):
+        assert junk not in wiki_lint.NONSTUDY_KW
+
+    def test_care_facility_prose_does_not_conflict(self):
+        body = "| Study design | 橫斷面次級分析（cross-sectional），長期照護機構居民 |"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "study"
+
+    def test_diagnostic_criteria_prose_does_not_conflict(self):
+        body = "| Study design | 多中心回溯性登錄研究；收案採標準診斷準則 |"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "study"
+
+    def test_regulatory_label_is_guideline_despite_negated_rct(self):
+        # 藥品仿單的 sd 常出現「而非 head-to-head RCT」這類否定句
+        body = "| Study design | 核准仿單；劑量建議基於申請資料而非 head-to-head RCT |"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
+
+    def test_scientific_statement_is_guideline_despite_negated_rct(self):
+        body = "| Study design | Scientific Statement — 敘述性文獻回顧 + 專家建議，非 RCT |"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
+
+    def test_assessment_tool_is_guideline(self):
+        body = "| Study design | 偏差風險評估工具（risk-of-bias tool version 2）|"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
+
+    def test_drug_info_database_is_guideline(self):
+        body = "| Study design | 次級藥物資訊資料庫 |"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
+
+    def test_external_validation_is_study(self):
+        body = "| Study design | 族群 PK 模型預測效能系統評估（外部驗證 / 模擬）|"
+        assert wiki_lint.classify_source(make_page(body))["category"] == "study"
 
 
 class TestNarrativeReviewNotMisclassified:

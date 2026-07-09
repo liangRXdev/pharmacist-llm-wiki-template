@@ -41,17 +41,29 @@ EBM_LIGHT = ["Study design", "Applicability", "Bottom line"]
 STUDY_KW = ["rct", "randomi", "randomized", "cohort", "case-control", "case control",
             "meta-analysis", "meta analysis", "pooled", "post hoc", "post-hoc",
             "cross-sectional", "observational", "隨機", "世代", "病例對照",
-            "統合分析", "前瞻", "回溯", "觀察性", "次級分析"]
+            "統合分析", "前瞻", "回溯", "回顧性", "觀察性", "次級分析",
+            "case series", "個案系列", "方法比較", "外部驗證", "external validation"]
 # 非研究型線索（guideline/共識/工具/法規/衛教/敘述回顧）→ 查 EBM_LIGHT
 # narrative review 類務必列入：其 Study design 欄常出現「非 systematic review / meta-analysis」
 # 這類否定句，或「以 XXX 之 meta-analysis 為引用依據」這類**他篇**論文的設計。
 # 兩者都會讓 STUDY_KW 的子字串比對誤命中（比對器不懂否定，也不懂引用語境）。
-NONSTUDY_KW = ["guideline", "指引", "consensus", "共識", "cpic", "criteria", "準則",
-               "beers", "stopp", "start", "清單", "prohibited list", "list",
-               "手冊", "manual", "education", "衛教", "量表", "scale", "standards of care",
-               "建議", "recommendation", "專書", "照護",
+#
+# 這裡只放**高精度、宣告型別**的短語（讀者一看就知道整份文件是什麼）。以下泛用詞已移除，
+# 因為它們會在一般敘述與英文單字內部命中，製造假衝突：
+#   照護（「長期照護機構」）、準則（「診斷準則」）、建議（極常見）、
+#   scale（title 內的量表名）、list（specialist/checklist）、start（started/restart）
+# 需偵測 STOPP/START 或清單類時，靠 `stopp` / `beers` / `criteria` / `清單` / `prohibited list`。
+NONSTUDY_KW = ["guideline", "指引", "consensus", "共識", "cpic", "criteria",
+               "beers", "stopp", "清單", "prohibited list",
+               "手冊", "manual", "education", "衛教", "量表", "standards of care",
+               "recommendation", "專書",
                "narrative review", "seminar", "敘述回顧", "敘述性回顧", "敘事性回顧",
-               "綜論", "專家意見", "expert opinion"]
+               "敘述性文獻回顧", "綜論", "專家意見", "expert opinion", "專家建議",
+               "scientific statement", "科學聲明", "state of the art review",
+               "仿單", "prescribing information",       # 監管文件
+               "評估工具", "assessment tool",            # RoB 2 / AMSTAR 等方法學工具
+               "藥物資訊資料庫",                          # Micromedex / UpToDate 等次級來源
+               "scoping review", "概念回顧", "comment"]
 SD_WINDOW = 300             # 「## Study design」獨立標題寫法：取區段開頭幾個字元判型
 SPARSE_CHARS = 500          # 正文非空白字元數低於此 → 稀疏
 META_NODES = {"index", "log", "MEMORY", "README"}  # 不計入孤立/指標的 meta 檔
@@ -189,24 +201,28 @@ def ebm_field_missing(field, body):
 def extract_study_design(body):
     """取出 Study design 欄的文字（小寫）。抓不到回空字串。
 
-    兩種寫法都要吃得到，否則 8 欄檢查會靜默失效：
-      1. 同一行帶冒號或表格列：`**Study design**：多中心雙盲 RCT` / `| Study design | RCT |`
-      2. 獨立標題 + 內容在下一行：
-             ## Study design
+    三種寫法都要吃得到，否則 8 欄檢查會靜默失效：
+      1. 標題（可帶編號或附註）+ 內容在下一行：
+             ## Study design            ## Study Design / 文件性質      ### 1. Study Design
 
              - **類型**：多中心、雙盲、1:1 隨機分派 RCT
-    寫法 2 只取該區段開頭 SD_WINDOW 字元——視窗過大會吞入後續段落的引用與否定句。
+      2. 同一行帶冒號：`**Study design**：多中心雙盲 RCT`
+      3. 表格列：`| Study design | RCT |` / `| 文件性質 | 年度更新摘要 |`
+
+    **標題優先於行內比對**：RoB 表格常有 `| 研究設計 | 🟡 Some | …` 這種以別名為列名的 domain
+    列，行內比對會抓到評等（「🟡 some」）而非設計。頁面若有 Study design 標題，該標題才是權威。
+    標題寫法只取區段開頭 SD_WINDOW 字元——視窗過大會吞入後續段落的引用與否定句。
     """
-    sm = re.search(r"study design[^\n|]*[|:：]\s*([^\n|]+)", body, re.I)
+    alias_re = "|".join(re.escape(a) for a in EBM_ALIASES["Study design"])
+    hm = re.search(rf"^#{{1,6}}[^\n]*?(?:{alias_re})[^\n]*$", body, re.I | re.M)
+    if hm:
+        sect = body[hm.end():]
+        nxt = re.search(r"^#{1,6}\s", sect, re.M)
+        return (sect[:nxt.start()] if nxt else sect)[:SD_WINDOW].lower()
+    sm = re.search(rf"(?:{alias_re})[^\n|]*[|:：]\s*([^\n|]+)", body, re.I)
     if sm:
         return sm.group(1).lower()
-    alias_re = "|".join(re.escape(a) for a in EBM_ALIASES["Study design"])
-    hm = re.search(rf"^#{{1,6}}\s*(?:{alias_re})\s*$", body, re.I | re.M)
-    if not hm:
-        return ""
-    sect = body[hm.end():]
-    nxt = re.search(r"^#{1,6}\s", sect, re.M)
-    return (sect[:nxt.start()] if nxt else sect)[:SD_WINDOW].lower()
+    return ""
 
 
 def _first_kw_pos(text, keywords):
@@ -226,6 +242,9 @@ def classify_source(page):
     理由：設計宣告寫在最前面，其後提到的研究設計多半是「引用他篇」或「否定自身」，
     例如「敘述回顧；以 XXX 之 meta-analysis 為引用依據」——meta-analysis 屬於被引的那篇。
     反之若研究關鍵字在前（如 `randomized controlled guideline`），語義真的衝突 → 不選邊。
+
+    標題只是**後備線索**：Study design 欄已明確宣告研究設計時，標題裡的非研究字樣不得否決它
+    （例如量表驗證研究的標題常含「量表 / scale」，但頁面本身是 cross-sectional 研究）。
     """
     if page["fm"].get("type") != "source":
         return None
@@ -236,7 +255,8 @@ def classify_source(page):
     study_pos = _first_kw_pos(sd, STUDY_KW)
     nonstudy_pos = _first_kw_pos(sd, NONSTUDY_KW)
     is_study = study_pos is not None
-    is_nonstudy = nonstudy_pos is not None or any(k in title_l for k in NONSTUDY_KW)
+    title_nonstudy = any(k in title_l for k in NONSTUDY_KW)
+    is_nonstudy = nonstudy_pos is not None or (title_nonstudy and not is_study)
 
     def _full():
         return [f for f in EBM_FULL if ebm_field_missing(f, body)]

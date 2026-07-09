@@ -277,15 +277,20 @@ uv run --with pyyaml python tools/wiki_lint.py
 lint 以 Study design 欄的關鍵字自動分流：研究關鍵字 → A 型查 8 欄；非研究線索 → B 型查 3 欄；
 **兩者皆無或語義衝突 → `undetermined`，不靜默降級，以 8 欄檢視並交人判定。**
 
-**三種可被辨識的寫法**（任一即可）：
+**三種可被辨識的寫法**（任一即可；標題可帶編號或附註，欄名支援中文別名）：
 
 ```markdown
 **Study design**：多中心雙盲 RCT          ← 同一行帶冒號
-| Study design | 多中心雙盲 RCT |          ← 表格列
-## Study design                            ← 獨立標題 + 下一行內容
+| Study design | 多中心雙盲 RCT |          ← 表格列（`| 文件性質 | … |` 等別名亦可）
+## Study design                            ← 標題 + 下一行內容
+### 1. Study Design                        ← 帶編號亦可
+## Study Design / 文件性質                 ← 帶附註亦可
 
 - **類型**：多中心、雙盲、1:1 隨機分派 RCT
 ```
+
+> **標題優先於行內比對**：RoB 表常以 `| 研究設計 | 🟡 Some |` 作為 domain 列名，行內比對會抓到
+> 偏誤評等而非研究設計。頁面若有 Study design 標題，該標題才是權威。
 
 > [!warning] Study design 欄裡**不要寫否定句，也不要寫他篇論文的設計**
 > 分流是**子字串比對，不懂否定，也不懂引用語境**。以下寫法會讓一篇綜論被誤判為單篇研究，
@@ -295,8 +300,10 @@ lint 以 Study design 欄的關鍵字自動分流：研究關鍵字 → A 型查
 > - ❌ `Narrative review（非 systematic review / meta-analysis）` ← 同上
 > - ❌ `敘述回顧；以 <某作者> <年份> 之 meta-analysis 為主要引用依據` ← 抓到的是**他篇**的設計
 >
-> 腳本端已有兩道防護：(1) narrative review 類關鍵字納入非研究線索；
-> (2) 兩類關鍵字同時出現時採**位置規則**——先出現者宣告型別（設計宣告在前，引用/否定在後）。
+> 腳本端已有三道防護：(1) narrative review 類關鍵字納入非研究線索；
+> (2) 兩類關鍵字同時出現時採**位置規則**——先出現者宣告型別（設計宣告在前，引用/否定在後）；
+> (3) 標題只是後備線索——Study design 欄已明確宣告研究設計時，標題裡的非研究字樣（如「量表 /
+> scale」）不得否決它。
 > 但**治本做法是寫乾淨**：
 >
 > - ✅ `**來源型別**：受邀綜論（invited narrative review），期刊年份`
