@@ -2,6 +2,8 @@
 
 臨床論文的關鍵數據多在表格，提取品質直接影響 wiki source 頁的可信度。本指南涵蓋三個工具：**pdfminer.six**（全文正文，快速跨平台）、**Docling**（關鍵表格首選，品質最佳）與 **MinerU**（整檔轉換，次選/備援）。
 
+> **本檔講「怎麼裝」；[`pdf-extraction-strategy.md`](pdf-extraction-strategy.md) 講「何時用哪個、失敗怎麼辦」。**
+
 > 首選工作流：**pdfminer 全文正文 + Docling 逐表（切小檔）**。
 
 兩者都建議用 [`uv`](https://github.com/astral-sh/uv) 管理 Python 環境（避免污染系統 Python）。

@@ -102,58 +102,22 @@ updated: YYYY-MM-DD
 
 **一次 ingest 預期觸及 5–15 個 wiki 頁面。**
 
-#### 3.1.1 Ingest 時的證據紀律（實戰累積，逐條都有踩坑成因）
+#### 3.1.1 Ingest 時的證據紀律（六條硬規則，常駐生效）
 
-**(a) 引用的效果量必須連同「哪個分析模型」一起記。**
-同一篇論文對同一 outcome 常給出多個估計（貝氏主要分析 vs frequentist 敏感度分析；不同隨機效應模型）。
-點估計可能相近而信賴區間、異質性（I²）差異極大，**指引引用的未必是原文的主要分析**。
-頁面上逐列標明模型；`grep` 到一串裸數值卻無法判斷哪個屬於哪一列時，**代表表格結構已被抽取工具打散**
-→ 依 §7.1 切小檔重建表格，不要照抄摘要。
+- **(a)** 引用效果量時，**連同「哪個分析模型」一起記**（主要分析 vs 敏感度分析、不同隨機效應模型）。
+  裸數值無法對應到列/欄 → 表格已被抽取工具打散，切小檔重建，**不要照抄摘要**。
+- **(b)** 原文自評的證據等級**一律重算**。與原文一致也要寫明一致；RoB 判定不同時**兩者並存並註明**，
+  不要改掉自己的判定去迎合原文。
+- **(c)** **不得**從「單一試驗為 null」推論「該次族群無效」（subgroup fallacy）。
+  主張次族群差異需要**交互作用檢定**。
+- **(d)** 新文獻推翻你先前寫下的推論時，**回頭改舊頁**，不要只新增一頁。
+- **(e)** 誤植會沿連結擴散。發現時**沿反向連結全部更正**，並在 `log.md` 記錄更正處數。
+- **(f)** 引用一律先過 **CrossRef DOI 存在性 gate**（`GET https://api.crossref.org/works/{DOI}`）再做語意比對。
+  **existence 通過 ≠ claim 通過**；CrossRef 的更正登錄有系統性缺口，**另須 grep PDF 首頁**的
+  `Corrected on` / `Erratum` / `Retracted`。查不到就說查不到，**不得猜測更正內容**。
 
-**(b) 原文自評的證據等級一律重算，但重算不等於一定會推翻。**
-重算與原文一致時，**照樣寫入重算過程並註明一致**——那本身是可信度訊號。
-不一致時才標 `> [!warning] 矛盾`。RoB 判定與原作者不同屬正常（判斷尺度差異，非事實爭議）
-→ **兩者並存並註明**，不要單方面改掉自己的判定去迎合原文。
-
-**(c) 不要從「單一試驗為 null」推論「該次族群無效」。**
-這是 subgroup fallacy，而且極易寫進 concept 頁變成假的臨床建議。
-要主張次族群差異，需要**交互作用檢定**，不是「A 試驗顯著、B 試驗不顯著」。
-單一試驗的 null 多半是**精確度不足**，不是**特異性無效**。
-
-**(d) 新文獻可能推翻你自己先前寫下的推論——回頭改，不要只是新增一頁。**
-知識庫的價值在於一致性。新增頁而不修舊頁，等於讓被推翻的結論繼續以「已寫下」的權威留在庫裡。
-ingest 完成前，把本次主題相關的舊頁推論句逐一複核。
-
-**(e) 誤植會沿著連結擴散。**
-把 pooled 值標成某單一試驗的結果、把敏感度分析標成主要分析——這類錯誤一旦寫進 source 頁，
-後續每一頁都會照抄。發現時**沿著反向連結全部更正**，並在 log.md 記錄更正處數。
-
-**(f) DOI 存在性查核（anti-hallucination gate），以及它抓不到的東西。**
-
-建立 source 頁與查核引用時，先做**確定性**的存在性檢查，再做語意比對：
-
-```
-GET https://api.crossref.org/works/{DOI}      # 免金鑰
-```
-- 404 / 無 `message` → ❌ DOI 不存在（捏造或錯字），**不進入語意比對**
-- 有回應 → 比對回傳 `title` 與所引標題是否為同一篇（token overlap，不求字面全等）
-- 檢查 `update-to` / `updated-by` → 撤稿 / 更正 / 表達關切
-
-> [!warning] 硬規則 1：existence 通過 ≠ claim 通過
-> 機器抓得到「不存在」與「DOI 對到別篇」，**抓不到「誤引述」**。
-> 存在性通過只解鎖語意比對，不能取代它。CrossRef 若無法連線，於該列標
-> 「existence gate skipped」並照常做語意比對——**降級為明示的不確定，不可降級為靜默通過**。
-
-> [!warning] 硬規則 2：CrossRef 的更正登錄有系統性缺口，必須另查 PDF 首頁
-> 實測遇過同一期刊連續兩篇論文，PDF 首頁明載 `Corrected on <日期>`，
-> 而 CrossRef 的 `update-to` / `updated-by` **皆為空**。連續命中即非個案。
->
-> 因此每篇都做兩件事：
-> 1. 查 CrossRef `update-to` / `updated-by`
-> 2. **`grep` 抽出的 `_extracted.txt` 前 ~100 行是否有 `Corrected on` / `Erratum` / `Retracted`**
->
-> 任一命中即在頁面標記。CrossRef 空而 PDF 有 → 標「CrossRef 未反映該更正，內容待原站確認」，
-> **不得猜測更正內容**（§六「查不到就說查不到」）。
+> 每條規則的踩坑成因、CrossRef 回應的逐欄判讀、兩條硬規則的完整措辭：
+> 見 [`docs/evidence-discipline.md`](docs/evidence-discipline.md)。
 
 ### 3.2 Query（提問查詢）
 
@@ -201,9 +165,14 @@ uv run --with pyyaml python tools/wiki_lint.py
 ## Comparisons（比較）
 - [[wiki/comparison-主題]] — 比較對象摘要
 
+## Syntheses（跨文獻綜合）
+- [[wiki/synthesis-主題]] — 綜合了哪幾篇、得出什麼
+
 ## Queries（查詢記錄）
 - [[wiki/query-YYYY-MM-DD-主題]] — 問題摘要
 ```
+
+> 六個分節須與 `Templates/index.md` 的骨架一致（`type` 定義見 §二）。
 
 ---
 
@@ -328,50 +297,16 @@ lint 以 Study design 欄的關鍵字自動分流：研究關鍵字 → A 型查
 
 ## 七、PDF 處理工具策略
 
-### 7.1 Ingest 用途（建立 source 頁）
+**首選工作流：pdfminer 抽全文正文 + Docling 逐表抽關鍵臨床表格。** MinerU 為次選/備援。
 
-**首選工作流：分工＝pdfminer 全文正文 + Docling 逐表（關鍵表格）。** MinerU 退為「需整檔一次出、可接受黏字」的次選。
+> [!warning] 動手前必讀這一條
+> Docling **不可**直接餵整份大型 PDF（>~50 頁）：CLI 多無 `--page-range`，記憶體會累積爆掉
+> （`std::bad_alloc`）並可能**拖垮整機**。務必先用 pypdf 切小檔（每檔 3–5 頁，只含目標表格頁）
+> 再逐檔跑。
 
-**(A) 正文：pdfminer.six** — 敘述/建議分級等文字段落，抽全文後 Read `.txt`（快、跨平台、穩定）：
-
-```bash
-uv run --with pdfminer.six python -c "from pdfminer.high_level import extract_text; \
-open('out.txt','w',encoding='utf-8').write(extract_text('<PDF路徑>'))"
-```
-> Windows 注意：`uvx --from pdfminer.six pdf2txt.py` 無效（`.py` 非 Win32 執行檔）；須用 `uv run --with pdfminer.six python -c` 呼叫 API。
-
-**(B) 關鍵臨床表格：Docling（切小檔逐表）★ 表格品質最佳**
-- **優點**：原生輸出 GFM markdown 表（可直接貼入 wiki）、欄列分明、字元與臨床閾值準確（實測勝 MinerU 的黏字、字母混淆、閾值污染）。
-- **適合時機**：劑量表、不良反應表、診斷閾值表、治療決策矩陣、**多模型敏感度分析表**等高精度表。
-- **限制**：CLI 多無 `--page-range`；整份大型 PDF（>~50 頁）會累積記憶體爆掉（`std::bad_alloc`）並可能拖垮整機 → **務必先用 pypdf 切小檔（每檔 3–5 頁，只含目標表格頁）再逐檔跑**；輸出表後常嵌 base64 圖片字串，以 `grep -v "data:image"` 剝除；模型載入較慢。
-
-> [!important] **何時必須切表給 Docling**（判斷徵兆，不是憑感覺）
-> 當 pdfminer 抽出的數字**逐一正確、但欄列對應被打散**時。典型症狀：`grep` 到一串裸數值
-> （`0.86 (0.72 to 0.98)`、`0.91 (0.85 to 0.97)`…）卻**無法判斷哪個屬於哪一列/哪一欄**。
->
-> 此時若「照抄摘要的那個數字」，就會把**敏感度分析誤當成主要分析**——而指引引用的
-> 往往正是敏感度分析那一列。這種錯誤不會被任何 lint 抓到。
-
-```bash
-# Step 0：先定位表格在第幾頁（不必先跑 MinerU）
-uv run --with pypdf python -c "from pypdf import PdfReader; r=PdfReader('<PDF>'); [print('page_idx',i) for i,p in enumerate(r.pages) if '<表中獨特字串>' in (p.extract_text() or '')]"
-# Step 1：pypdf 切目標表格頁（0-based index）
-uv run --with pypdf python -c "from pypdf import PdfReader,PdfWriter; r=PdfReader('<PDF>'); w=PdfWriter(); [w.add_page(r.pages[i]) for i in range(<起>,<迄>+1)]; w.write(open('split.pdf','wb'))"
-# Step 2：對小檔跑 Docling
-docling split.pdf --to md --output <輸出目錄> --table-mode accurate
-```
-
-**(C) MinerU：整檔一次轉換（次選/備援）** — 安裝與指令見 `docs/setup-mineru.md`。其 `_content_list.json` 可快速定位每張表的頁碼（即使整份表格品質不佳，用於決定 Docling 要切哪幾頁）。HTML 表格殘餘問題：相鄰列合併、黏字、字母混淆（II↔Il）、CI 截斷 → 對照正文修正。
-
-### 7.2 失敗時的備援邏輯
-
-- **Docling `bad_alloc`**（整份崩潰）→ 確認背景進程已死 → 改切更小檔逐表 → 仍失敗則該表退 MinerU 或 pdfminer + 對照原文手動建表。
-- **MinerU 啟動失敗/殭屍進程** → 清殭屍 python 進程後重試，或改用 Docling（切小檔）抽表。
-- **兩者皆失敗** → pdfminer 抽全文正文；表格數值標記 `[需 Docling/MinerU 驗證]`，待工具正常後重跑該表確認。
-
-### 7.3 快速查詢（非 ingest）
-
-直接用 Read 工具讀 PDF（`pages` 參數分段）。若環境無 `pdftoppm` 致無法讀 PDF，先用 pdfminer 提取文字再 Read `.txt`。
+指令、選型判準（何時該切表給 Docling）、三工具的失敗備援邏輯：
+見 [`docs/pdf-extraction-strategy.md`](docs/pdf-extraction-strategy.md)。
+安裝見 [`docs/setup-mineru.md`](docs/setup-mineru.md)。
 
 ---
 

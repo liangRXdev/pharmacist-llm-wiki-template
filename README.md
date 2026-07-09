@@ -112,7 +112,9 @@ graph LR
 │   └── ci.yml         # GitHub Actions：push/PR 跑測試 + lint 摘要
 └── docs/
     ├── quickstart-for-clinical-pharmacists.md  # 新手 Quick Start（不寫程式者從這裡開始）
-    └── setup-mineru.md                         # MinerU / pdfminer / Docling 安裝指南
+    ├── evidence-discipline.md                  # 六條 ingest 證據紀律的踩坑成因（規則本身在 CLAUDE.md §3.1.1）
+    ├── pdf-extraction-strategy.md              # 何時用 pdfminer / Docling / MinerU、失敗備援
+    └── setup-mineru.md                         # 上述三個工具的安裝指南
 ```
 
 > Lint 用法：在 vault 根目錄執行 `uv run --with pyyaml python tools/wiki_lint.py`，產生 `output/lint-YYYY-MM-DD.md`。
