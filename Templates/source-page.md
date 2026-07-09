@@ -23,8 +23,11 @@ updated: YYYY-MM-DD
 
 ---
 
-## EBM 最低欄位（研究型文獻必填；指引/規範型可酌情略過 PICO/效應量）
+## EBM 最低欄位（研究型文獻必填；指引/規範/綜論型可酌情略過 PICO/效應量）
 
+<!-- Study design 欄決定 lint 走 8 欄或 3 欄檢查。
+     只寫本頁自身的設計；否定句（「非 systematic review」）與他篇論文的設計
+     （「以 X 之 meta-analysis 為依據」）一律移到正文，否則會被誤判型別。 -->
 - **Study design**：
 - **PICO**
   - P（族群）：

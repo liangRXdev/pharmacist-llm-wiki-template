@@ -90,11 +90,65 @@ updated: YYYY-MM-DD
 2. 與使用者簡短討論重點（2–3 個核心發現）
 3. 在 `wiki/` 建立 source 頁面（摘要＋重點＋方法論評估）；frontmatter 寫入 `source_hash`（raw 檔 sha256 前 16 碼，供 lint 內容過期檢查；多來源用 `{檔名: 雜湊}`）
 4. 識別文中實體（藥物、疾病、機制）→ 更新或新建對應 entity/concept 頁
-5. 更新 `wiki/index.md`
-6. 在 `wiki/log.md` 追加一筆 ingest 記錄
-7. 回報：「已建立 N 頁，更新 M 頁，請確認」
+5. **回頭複核舊頁**：`grep` 既有頁面中與本主題相關的推論句，凡被新文獻推翻者就地改掉（見 §3.1.1）
+6. 更新 `wiki/index.md`
+7. 在 `wiki/log.md` 追加一筆 ingest 記錄
+8. 回報：「已建立 N 頁，更新 M 頁，標記矛盾 K 處，lint 全綠，請確認」
 
 **一次 ingest 預期觸及 5–15 個 wiki 頁面。**
+
+#### 3.1.1 Ingest 時的證據紀律（實戰累積，逐條都有踩坑成因）
+
+**(a) 引用的效果量必須連同「哪個分析模型」一起記。**
+同一篇論文對同一 outcome 常給出多個估計（貝氏主要分析 vs frequentist 敏感度分析；不同隨機效應模型）。
+點估計可能相近而信賴區間、異質性（I²）差異極大，**指引引用的未必是原文的主要分析**。
+頁面上逐列標明模型；`grep` 到一串裸數值卻無法判斷哪個屬於哪一列時，**代表表格結構已被抽取工具打散**
+→ 依 §7.1 切小檔重建表格，不要照抄摘要。
+
+**(b) 原文自評的證據等級一律重算，但重算不等於一定會推翻。**
+重算與原文一致時，**照樣寫入重算過程並註明一致**——那本身是可信度訊號。
+不一致時才標 `> [!warning] 矛盾`。RoB 判定與原作者不同屬正常（判斷尺度差異，非事實爭議）
+→ **兩者並存並註明**，不要單方面改掉自己的判定去迎合原文。
+
+**(c) 不要從「單一試驗為 null」推論「該次族群無效」。**
+這是 subgroup fallacy，而且極易寫進 concept 頁變成假的臨床建議。
+要主張次族群差異，需要**交互作用檢定**，不是「A 試驗顯著、B 試驗不顯著」。
+單一試驗的 null 多半是**精確度不足**，不是**特異性無效**。
+
+**(d) 新文獻可能推翻你自己先前寫下的推論——回頭改，不要只是新增一頁。**
+知識庫的價值在於一致性。新增頁而不修舊頁，等於讓被推翻的結論繼續以「已寫下」的權威留在庫裡。
+ingest 完成前，把本次主題相關的舊頁推論句逐一複核。
+
+**(e) 誤植會沿著連結擴散。**
+把 pooled 值標成某單一試驗的結果、把敏感度分析標成主要分析——這類錯誤一旦寫進 source 頁，
+後續每一頁都會照抄。發現時**沿著反向連結全部更正**，並在 log.md 記錄更正處數。
+
+**(f) DOI 存在性查核（anti-hallucination gate），以及它抓不到的東西。**
+
+建立 source 頁與查核引用時，先做**確定性**的存在性檢查，再做語意比對：
+
+```
+GET https://api.crossref.org/works/{DOI}      # 免金鑰
+```
+- 404 / 無 `message` → ❌ DOI 不存在（捏造或錯字），**不進入語意比對**
+- 有回應 → 比對回傳 `title` 與所引標題是否為同一篇（token overlap，不求字面全等）
+- 檢查 `update-to` / `updated-by` → 撤稿 / 更正 / 表達關切
+
+> [!warning] 硬規則 1：existence 通過 ≠ claim 通過
+> 機器抓得到「不存在」與「DOI 對到別篇」，**抓不到「誤引述」**。
+> 存在性通過只解鎖語意比對，不能取代它。CrossRef 若無法連線，於該列標
+> 「existence gate skipped」並照常做語意比對——**降級為明示的不確定，不可降級為靜默通過**。
+
+> [!warning] 硬規則 2：CrossRef 的更正登錄有系統性缺口，必須另查 PDF 首頁
+> 實測遇過同一期刊連續兩篇論文，PDF 首頁明載 `Corrected on <日期>`，
+> 而 CrossRef 的 `update-to` / `updated-by` **皆為空**。連續命中即非個案。
+>
+> 因此每篇都做兩件事：
+> 1. 查 CrossRef `update-to` / `updated-by`
+> 2. **`grep` 抽出的 `_extracted.txt` 前 ~100 行是否有 `Corrected on` / `Erratum` / `Retracted`**
+>
+> 任一命中即在頁面標記。CrossRef 空而 PDF 有 → 標「CrossRef 未反映該更正，內容待原站確認」，
+> **不得猜測更正內容**（§六「查不到就說查不到」）。
 
 ### 3.2 Query（提問查詢）
 
@@ -201,7 +255,7 @@ uv run --with pyyaml python tools/wiki_lint.py
 | **Applicability** | 對本地臨床實務的適用性說明 |
 | **Bottom line** | 單句結論，直接可用於臨床決策 |
 
-#### (B) Guideline / 共識 / 藥物基因指引 / 工具量表 / 法規清單 / 衛教
+#### (B) Guideline / 共識 / 藥物基因指引 / 工具量表 / 法規清單 / 衛教 / **narrative review**
 **不適用** PICO / Primary / Secondary outcome / RoB（單篇研究概念）。最低必備 3 欄：
 
 | 欄位 | 內容要求 |
@@ -211,11 +265,52 @@ uv run --with pyyaml python tools/wiki_lint.py
 | **Bottom line** | 單句可用於臨床決策的結論 |
 
 > guideline 類若採自有證據分級（COR-LOE、KDIGO 1A/2B、CPIC strength），記於 GRADE 欄或正文即可，不強制 RoB。
+> narrative review 可另加 `## SANRA 評估`（非 lint 強制）：是否說明立論理由、是否描述文獻檢索、
+> 關鍵論述是否有引用、是否承認相反證據。**未描述檢索策略者不可作為證據強度之依據。**
 
 #### 共通規則
 - 欄名中英皆可（`Study design`／研究設計、`Applicability`／適用性、`Bottom line`／單句結論）；`tools/wiki_lint.py` 已支援別名比對。
 - 資訊不足以填寫某欄位時標記 `[資訊不足]` 而非留空。
-- 型別判定：lint 腳本以 Study design 欄關鍵字自動分流（研究關鍵字→A 型查 8 欄；其餘→B 型查 3 欄）。
+
+#### 型別判定與 Study design 欄的寫法（**踩過坑，務必照做**）
+
+lint 以 Study design 欄的關鍵字自動分流：研究關鍵字 → A 型查 8 欄；非研究線索 → B 型查 3 欄；
+**兩者皆無或語義衝突 → `undetermined`，不靜默降級，以 8 欄檢視並交人判定。**
+
+**三種可被辨識的寫法**（任一即可）：
+
+```markdown
+**Study design**：多中心雙盲 RCT          ← 同一行帶冒號
+| Study design | 多中心雙盲 RCT |          ← 表格列
+## Study design                            ← 獨立標題 + 下一行內容
+
+- **類型**：多中心、雙盲、1:1 隨機分派 RCT
+```
+
+> [!warning] Study design 欄裡**不要寫否定句，也不要寫他篇論文的設計**
+> 分流是**子字串比對，不懂否定，也不懂引用語境**。以下寫法會讓一篇綜論被誤判為單篇研究，
+> 進而逼你去補**根本不存在**的 primary/secondary outcome：
+>
+> - ❌ `Seminar（系統性敘述回顧）；……；無 meta-analysis` ← 否定句裡的關鍵字被抓走
+> - ❌ `Narrative review（非 systematic review / meta-analysis）` ← 同上
+> - ❌ `敘述回顧；以 <某作者> <年份> 之 meta-analysis 為主要引用依據` ← 抓到的是**他篇**的設計
+>
+> 腳本端已有兩道防護：(1) narrative review 類關鍵字納入非研究線索；
+> (2) 兩類關鍵字同時出現時採**位置規則**——先出現者宣告型別（設計宣告在前，引用/否定在後）。
+> 但**治本做法是寫乾淨**：
+>
+> - ✅ `**來源型別**：受邀綜論（invited narrative review），期刊年份`
+> - 否定句、他篇引用一律移到 `## SANRA 評估` 或正文，**不要放進 Study design 欄**。
+
+> [!important] 收工前必查分流計數（兩個方向都要看）
+> `--json` 摘要中的 `source_study` / `source_guideline` / `source_undetermined` 是分流是否正確的唯一可見訊號：
+>
+> - 單篇研究被算進 `source_guideline` → Study design 欄沒被辨識到，**8 欄檢查靜默失效**
+> - 綜論 / guideline 被算進 `source_study` → 過度觸發，會逼你補不存在的 outcome 欄位
+> - `source_undetermined` 增加 → Study design 欄缺失或關鍵字衝突；**腳本刻意不選邊，等你判定**
+>
+> **`ebm_missing_study` 非 0 時，先確認那頁真的是單篇研究，再決定要不要補。**
+> 對 narrative review 硬編 primary/secondary outcome 違反本節 (B)，且等於憑空捏造資料。
 
 ---
 
@@ -235,10 +330,19 @@ open('out.txt','w',encoding='utf-8').write(extract_text('<PDF路徑>'))"
 
 **(B) 關鍵臨床表格：Docling（切小檔逐表）★ 表格品質最佳**
 - **優點**：原生輸出 GFM markdown 表（可直接貼入 wiki）、欄列分明、字元與臨床閾值準確（實測勝 MinerU 的黏字、字母混淆、閾值污染）。
-- **適合時機**：劑量表、不良反應表、診斷閾值表、治療決策矩陣等高精度臨床表。
+- **適合時機**：劑量表、不良反應表、診斷閾值表、治療決策矩陣、**多模型敏感度分析表**等高精度表。
 - **限制**：CLI 多無 `--page-range`；整份大型 PDF（>~50 頁）會累積記憶體爆掉（`std::bad_alloc`）並可能拖垮整機 → **務必先用 pypdf 切小檔（每檔 3–5 頁，只含目標表格頁）再逐檔跑**；輸出表後常嵌 base64 圖片字串，以 `grep -v "data:image"` 剝除；模型載入較慢。
 
+> [!important] **何時必須切表給 Docling**（判斷徵兆，不是憑感覺）
+> 當 pdfminer 抽出的數字**逐一正確、但欄列對應被打散**時。典型症狀：`grep` 到一串裸數值
+> （`0.86 (0.72 to 0.98)`、`0.91 (0.85 to 0.97)`…）卻**無法判斷哪個屬於哪一列/哪一欄**。
+>
+> 此時若「照抄摘要的那個數字」，就會把**敏感度分析誤當成主要分析**——而指引引用的
+> 往往正是敏感度分析那一列。這種錯誤不會被任何 lint 抓到。
+
 ```bash
+# Step 0：先定位表格在第幾頁（不必先跑 MinerU）
+uv run --with pypdf python -c "from pypdf import PdfReader; r=PdfReader('<PDF>'); [print('page_idx',i) for i,p in enumerate(r.pages) if '<表中獨特字串>' in (p.extract_text() or '')]"
 # Step 1：pypdf 切目標表格頁（0-based index）
 uv run --with pypdf python -c "from pypdf import PdfReader,PdfWriter; r=PdfReader('<PDF>'); w=PdfWriter(); [w.add_page(r.pages[i]) for i in range(<起>,<迄>+1)]; w.write(open('split.pdf','wb'))"
 # Step 2：對小檔跑 Docling
