@@ -13,8 +13,11 @@
 - **三流程 SOP**：Ingest（建頁）/ Query（查詢）/ Lint（健檢）
 - **EBM source 頁最低欄位要求**：強制記錄 Study design、PICO、effect size + 95% CI、RoB、GRADE、Applicability、Bottom line
 - **雙向連結知識圖譜**：source ↔ entity ↔ concept，可用 Obsidian graph view 瀏覽
-- **PDF 提取策略**：pdfminer.six（全文正文）+ Docling 逐表（關鍵臨床表格，品質最佳）；MinerU 為次選/備援
-- **機械化 lint 腳本**（`tools/wiki_lint.py`）：壞鏈/孤立頁/稀疏頁/frontmatter 缺欄/過期頁 + EBM 欄位依型別查核 + 圖譜指標
+- **PDF 提取策略**：先用 pdf-inspector **分流**（<5 秒判斷這份 PDF 該走哪條路），再依結果選
+  pdfminer.six（全文正文）／Docling（關鍵臨床表格，品質最佳）／MinerU（備援）；
+  **含三種「安靜失敗」的判別法**——工具不報錯但表格是錯的，那才是真正會傷到你的情況
+- **機械化 lint 腳本**（`tools/wiki_lint.py`）：壞鏈/孤立頁/稀疏頁/frontmatter 缺欄 + EBM 欄位依型別查核 + 圖譜指標，
+  並以**來源檔內容雜湊**（非 mtime）偵測「原始文獻換版了但頁面沒更新」
 - **病患資料自動遮罩**＋**異動日誌可稽核**
 
 ---
@@ -113,8 +116,8 @@ graph LR
 └── docs/
     ├── quickstart-for-clinical-pharmacists.md  # 新手 Quick Start（不寫程式者從這裡開始）
     ├── evidence-discipline.md                  # 六條 ingest 證據紀律的踩坑成因（規則本身在 CLAUDE.md §3.1.1）
-    ├── pdf-extraction-strategy.md              # 何時用 pdfminer / Docling / MinerU、失敗備援
-    └── setup-mineru.md                         # 上述三個工具的安裝指南
+    ├── pdf-extraction-strategy.md              # 分流表 + 何時用 pdf-inspector / pdfminer / Docling / MinerU、失敗模式與搶救法
+    └── setup-mineru.md                         # 上述四個工具的安裝指南
 ```
 
 > Lint 用法：在 vault 根目錄執行 `uv run --with pyyaml python tools/wiki_lint.py`，產生 `output/lint-YYYY-MM-DD.md`。
@@ -132,8 +135,9 @@ graph LR
 2. **初始化 wiki**：把 `Templates/index.md`、`Templates/log.md` 複製到 `wiki/`（fresh clone 的 `wiki/` 只含 `.gitkeep`；複製後即為起始骨架）。
 3. （選用）若你不在台灣、不需要健保給付與多語藥物標籤規則，改寫 `CLAUDE.md` §六領域特殊規則。
    其餘部分開箱即用，**不需要做任何字串取代**。
-4. （選用）僅在文獻的**表格特別關鍵**時，才依 `docs/setup-mineru.md` 安裝 PDF 提取工具；
-   一般 ingest 由 `uv` 即時取用 pdfminer，無須預裝。
+4. （選用）**一般 ingest 不需預裝任何東西**——pdfminer 與 pdf-inspector 都由 `uv` 即時取用。
+   只有在文獻的**表格特別關鍵**（劑量表、藥敏閾值表、決策矩陣）時，才依
+   [`docs/setup-mineru.md`](docs/setup-mineru.md) 安裝 Docling。
 5. 把第一篇文獻 PDF 放進 `raw/`。
 6. 在 vault 目錄啟動 Claude Code，對它說：**「請處理 raw/你的檔名.pdf」**。
 7. LLM 會依 schema 建立 source 頁、相關 entity/concept 頁，並更新 index 與 log。

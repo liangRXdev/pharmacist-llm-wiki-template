@@ -1,12 +1,13 @@
 # PDF 提取工具安裝指南
 
-臨床論文的關鍵數據多在表格，提取品質直接影響 wiki source 頁的可信度。本指南涵蓋三個工具：**pdfminer.six**（全文正文，快速跨平台）、**Docling**（關鍵表格首選，品質最佳）與 **MinerU**（整檔轉換，次選/備援）。
+臨床論文的關鍵數據多在表格，提取品質直接影響 wiki source 頁的可信度。本指南涵蓋四個工具：**pdf-inspector**（分流／大型指引正文，免安裝）、**pdfminer.six**（全文正文，快速跨平台）、**Docling**（關鍵表格首選，品質最佳）與 **MinerU**（整檔轉換，次選/備援）。
 
 > **本檔講「怎麼裝」；[`pdf-extraction-strategy.md`](pdf-extraction-strategy.md) 講「何時用哪個、失敗怎麼辦」。**
 
-> 首選工作流：**pdfminer 全文正文 + Docling 逐表（切小檔）**。
+> 首選工作流：**先用 pdf-inspector 分流 → pdfminer 全文正文 + Docling 逐表（切小檔）**。
+> 分流表見 [`pdf-extraction-strategy.md`](pdf-extraction-strategy.md) §0。
 
-兩者都建議用 [`uv`](https://github.com/astral-sh/uv) 管理 Python 環境（避免污染系統 Python）。
+都建議用 [`uv`](https://github.com/astral-sh/uv) 管理 Python 環境（避免污染系統 Python）。
 
 ---
 
@@ -22,9 +23,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ---
 
-## 2. MinerU（首選）
+## 2. MinerU（次選/備援）
 
-MinerU 用電腦視覺重建表格，品質最佳，但需下載 ML 模型、啟動較慢，且在某些 Windows 環境偶有 timeout。
+> ⚠️ 舊版本文件曾把 MinerU 標為「首選」，那已過時——**關鍵表格的首選是 Docling**（§3），
+> MinerU 退為「需整檔一次出、可接受黏字」的備援。
+
+MinerU 用電腦視覺重建表格，但會黏字與字元誤判，需下載 ML 模型、啟動較慢，且在某些 Windows 環境偶有 timeout。
 
 ```bash
 # 建立獨立環境並安裝
@@ -88,7 +92,34 @@ Docling/MinerU 皆失敗時，以 pdfminer 抽正文，表格數值後標記 `[�
 
 ---
 
-## 5. MinerU timeout 時的清理（Windows）
+## 5. pdf-inspector（分流／大型指引正文；**免安裝**）
+
+純 Rust（無 ML、無 OCR、無雲端 API），由 `uv` 即時取用，不需預先安裝。
+
+> ⚠️ **pip 套件不提供 CLI entrypoint**（`uv tool install pdf-inspector` 會失敗），只能用 Python API。
+
+```bash
+uv run --with pdf-inspector python -c "
+import pdf_inspector as pi
+r = pi.process_pdf('<PDF路徑>')
+print(r.pdf_type, r.page_count, r.pages_with_tables, r.has_encoding_issues)
+open('out.md','w',encoding='utf-8').write(r.markdown)"
+```
+
+主要回傳欄位：`markdown` / `pdf_type` / `page_count` / `pages_with_tables`（**1-based**）/
+`pages_with_columns` / `pages_needing_ocr` / `has_encoding_issues` / `processing_time_ms`。
+另有 `classify_pdf()`（更快，只分類）與 `extract_pages_markdown(path, pages=[...])`（逐頁，0-based）。
+
+**用它做兩件事就好**：①分流與定位表格頁（取代「猜表中獨特字串再 pypdf grep」）
+②大型指引（約 50 頁以上、多為 Word 產生）的正文＋標題階層。
+
+> ⚠️ **不要用它的表格輸出做臨床數值表**——多欄表會塌陷，或把上標註腳編號黏到數值**前面**
+> （`≤2 ᵃ` → `a ≤2`），**數值全對、看起來完全正常**，但閾值判讀已經壞了。
+> 理由與判別訊號見 [`pdf-extraction-strategy.md`](pdf-extraction-strategy.md) §0。
+
+---
+
+## 6. MinerU timeout 時的清理（Windows）
 
 若反覆 timeout，可能有殘留 python 殭屍進程佔記憶體：
 
@@ -108,6 +139,7 @@ Stop-Process -Id <PID> -Force
 | **Docling** | ★★★★（GFM 表、閾值/字元準） | 慢（載入 ML 模型）；小檔約 1–1.5 min | ✅（**須切小檔**） | **關鍵臨床表格首選**（pypdf 切 3–5 頁逐表） |
 | MinerU | ★★★（CV 重建，偶黏字/字元錯誤） | 慢（載入 ML 模型） | ⚠️ Windows 偶 timeout | 整檔一次轉換；用 `_content_list.json` 定位表格頁 |
 | pdfminer.six | ★（純座標；表格不可用） | 快（秒級） | ✅ | 全文正文首選；表格工具失敗時文字備援 |
+| **pdf-inspector** | ★★★★（Word 產生的簡單寬格表）／**★（多欄密集數值表 → 塌陷或註腳位移）** | **極快（無 ML）** | ✅ | **分流／定位表格頁／大型指引正文＋標題階層**；**不可用於期刊數值表與窄欄正文** |
 
 > ⚠️ Docling 整份大檔會 `std::bad_alloc` 崩潰（無 `--page-range`）→ 務必先 pypdf 切小檔逐表。
 
