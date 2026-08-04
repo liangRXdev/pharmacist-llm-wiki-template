@@ -299,12 +299,28 @@ lint 以 Study design 欄的關鍵字自動分流：研究關鍵字 → A 型查
 
 **首選工作流：pdfminer 抽全文正文 + Docling 逐表抽關鍵臨床表格。** MinerU 為次選/備援。
 
-> [!warning] 動手前必讀這一條
-> Docling **不可**直接餵整份大型 PDF（>~50 頁）：CLI 多無 `--page-range`，記憶體會累積爆掉
-> （`std::bad_alloc`）並可能**拖垮整機**。務必先用 pypdf 切小檔（每檔 3–5 頁，只含目標表格頁）
-> 再逐檔跑。
+**先分流**：拿到 PDF 的第一件事是用 **pdf-inspector** 跑一次分類（<5 秒），依結果決定走法。
+本表為 [`docs/pdf-extraction-strategy.md`](docs/pdf-extraction-strategy.md) **§0（唯一真相）的副本**——
+要改分流走法，改那裡再同步這裡。
 
-指令、選型判準（何時該切表給 Docling）、三工具的失敗備援邏輯：
+| 分流結果 | 走法 |
+|---------|------|
+| **無表格** | 不用碰 Docling，pdfminer 正文即收工 |
+| **一般期刊論文**（≲30 頁、雙欄） | 正文 pdfminer；表格頁交 Docling |
+| **大型指引**（≳50 頁，多為 Word 產生） | 正文＋標題階層 pdf-inspector；**只把關鍵閾值表**交 Docling |
+
+> [!warning] 動手前必讀這三條
+> 1. **Docling 不可直接餵整份大型 PDF（>~50 頁）**：CLI 多無 `--page-range`，記憶體會累積爆掉
+>    （`std::bad_alloc`）並可能**拖垮整機**。務必先用 pypdf 切小檔（每檔 3–5 頁）再逐檔跑。
+> 2. **Docling 遇跨頁寬表／橫向版面會重建錯，但 `exit 0` 不報錯**（失敗模式 A2）——
+>    切小檔救不了，**不得硬套**，改走錨點交叉驗證。
+> 3. **pdf-inspector 的表格輸出不可用於臨床數值表**：多欄表會塌陷，或把上標註腳編號黏到數值
+>    **前面**（`≤2 ᵃ` → `a ≤2`），**數值全對、看起來完全正常**，但閾值判讀已經壞了。
+>    **硬規則：任何要寫進頁面的臨床數值表，一律出自 Docling。**
+>
+> 三者的共通點：**都是安靜的失敗**——沒有 lint 會抓到，只有人會。
+
+指令、選型判準（何時該切表給 Docling）、四工具的失敗備援邏輯與搶救法：
 見 [`docs/pdf-extraction-strategy.md`](docs/pdf-extraction-strategy.md)。
 安裝見 [`docs/setup-mineru.md`](docs/setup-mineru.md)。
 

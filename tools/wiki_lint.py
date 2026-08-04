@@ -60,6 +60,7 @@ NONSTUDY_KW = ["guideline", "指引", "consensus", "共識", "cpic", "criteria",
                "narrative review", "seminar", "敘述回顧", "敘述性回顧", "敘事性回顧",
                "敘述性文獻回顧", "綜論", "專家意見", "expert opinion", "專家建議",
                "scientific statement", "科學聲明", "state of the art review",
+               "viewpoint", "觀點論述", "editorial", "社論",   # 期刊觀點/社論類
                "仿單", "prescribing information",       # 監管文件
                "評估工具", "assessment tool",            # RoB 2 / AMSTAR 等方法學工具
                "藥物資訊資料庫",                          # Micromedex / UpToDate 等次級來源
