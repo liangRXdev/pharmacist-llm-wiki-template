@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1750" viewBox="0 0 1400 1750" role="img" aria-labelledby="title desc">
+  <title id="title">Pharmacist LLM Wiki Template 專案資訊總表</title>
+  <desc id="desc">臨床藥師用 AI 實證知識庫工作流程模板的資訊總表。</desc>
+  <defs>
+    <style>
+      .bg{fill:#f7fbff}.navy{fill:#062b63}.teal{fill:#0f8f94}.blue{fill:#1769aa}.purple{fill:#5b4ba3}.muted{fill:#536171}.danger{fill:#b42318}.warn{fill:#f59e0b}.card{fill:#fff;stroke:#b8c7da;stroke-width:2}.card2{fill:#f8fbff;stroke:#b8c7da;stroke-width:2}.soft{fill:#eef8f8}.softb{fill:#eef5ff}.softw{fill:#fff8e8}.softr{fill:#fff1f1}.h{font:700 34px 'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif}.h2{font:700 27px 'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif}.body{font:500 22px 'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif}.small{font:500 19px 'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif}.mono{font:600 20px Consolas,'Noto Sans Mono',monospace}.title{font:800 70px Arial,'Noto Sans TC',sans-serif}.subtitle{font:800 45px 'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif}.tag{fill:#062b63}.tagtext{fill:#fff;font:800 28px Arial,'Noto Sans TC',sans-serif}.check{fill:#0f8f94}.line{stroke:#2b3c55;stroke-width:5;marker-end:url(#arrow)}.dash{stroke:#b8c7da;stroke-width:2;stroke-dasharray:6 6}.iconStroke{stroke:#0f8f94;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#2b3c55"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1400" height="1750" rx="22"/>
+  <rect x="18" y="18" width="1364" height="1714" rx="22" fill="#fff" stroke="#d8e3f0" stroke-width="2"/>
+
+  <text x="700" y="95" text-anchor="middle" class="title navy">Pharmacist LLM Wiki Template</text>
+  <text x="700" y="155" text-anchor="middle" class="subtitle navy">臨床藥師用的 AI 實證知識庫工作流程模板</text>
+  <text x="700" y="205" text-anchor="middle" class="body">用 Claude Code / LLM Agent + Obsidian，將文獻整理成可查詢、可稽核、可健檢的個人藥學知識庫</text>
+
+  <!-- Section 1 -->
+  <rect class="card" x="30" y="240" width="455" height="360" rx="14"/>
+  <rect class="tag" x="50" y="260" width="42" height="42" rx="8"/><text x="71" y="290" text-anchor="middle" class="tagtext">1</text>
+  <text x="115" y="292" class="h2 navy">這個專案是什麼？</text>
+  <circle cx="60" cy="350" r="6" class="navy"/><text x="85" y="358" class="body">提供方法與骨架，不含臨床內容</text>
+  <circle cx="60" cy="425" r="6" class="navy"/><text x="85" y="433" class="body">以 Markdown Wiki 建立個人 EBM 知識庫</text>
+  <circle cx="60" cy="500" r="6" class="navy"/><text x="85" y="508" class="body">讓 LLM 協助整理文獻、維護連結與索引</text>
+  <path d="M345 505 h90 v55 h-120 v-85 h30 z" fill="#d9ecff" stroke="#1769aa" stroke-width="4"/>
+  <path d="M315 475 h45 l18 22 h57 v38 h-120 z" fill="#9dccf7" stroke="#1769aa" stroke-width="4"/>
+
+  <!-- Section 2 -->
+  <rect class="card" x="505" y="240" width="865" height="360" rx="14"/>
+  <rect class="tag" x="525" y="260" width="42" height="42" rx="8"/><text x="546" y="290" text-anchor="middle" class="tagtext">2</text>
+  <text x="590" y="292" class="h2 navy">核心工作流程</text>
+  <g transform="translate(535,325)">
+    <rect x="0" y="0" width="135" height="150" rx="16" fill="#fff" stroke="#8ca5c2" stroke-width="2"/>
+    <text x="67" y="38" text-anchor="middle" class="small">raw/</text><text x="67" y="70" text-anchor="middle" class="small">PDF 文獻</text>
+    <rect x="48" y="86" width="45" height="48" fill="#fff" stroke="#444" stroke-width="2"/><rect x="42" y="110" width="58" height="28" fill="#d84035" rx="4"/><text x="71" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">PDF</text>
+    <line x1="145" y1="75" x2="180" y2="75" class="line"/>
+    <rect x="190" y="0" width="150" height="150" rx="16" fill="#e9fbfb" stroke="#0f8f94" stroke-width="2"/>
+    <text x="265" y="38" text-anchor="middle" class="small">Claude Code /</text><text x="265" y="68" text-anchor="middle" class="small">LLM Agent</text>
+    <circle cx="265" cy="108" r="34" fill="#0f8f94"/><path d="M250 105 q15-25 30 0 q-15 25-30 0 M265 82 v52 M245 110 h40" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <line x1="350" y1="75" x2="385" y2="75" class="line"/>
+    <rect x="395" y="0" width="150" height="150" rx="16" fill="#e9fbfb" stroke="#0f8f94" stroke-width="2"/>
+    <text x="470" y="36" text-anchor="middle" class="small">source /</text><text x="470" y="64" text-anchor="middle" class="small">entity / concept</text><text x="470" y="92" text-anchor="middle" class="small">頁面</text>
+    <rect x="450" y="104" width="40" height="35" fill="#fff" stroke="#0f8f94" stroke-width="3"/><line x1="458" y1="115" x2="482" y2="115" stroke="#0f8f94" stroke-width="3"/><line x1="458" y1="125" x2="482" y2="125" stroke="#0f8f94" stroke-width="3"/>
+    <line x1="555" y1="75" x2="590" y2="75" class="line"/>
+    <rect x="600" y="0" width="140" height="150" rx="16" fill="#eef5ff" stroke="#1769aa" stroke-width="2"/>
+    <text x="670" y="42" text-anchor="middle" class="small">index.md /</text><text x="670" y="72" text-anchor="middle" class="small">log.md</text><rect x="645" y="100" width="50" height="42" fill="#b6d6f6" stroke="#1769aa" stroke-width="4"/><line x1="657" y1="113" x2="682" y2="113" stroke="#1769aa" stroke-width="3"/>
+    <line x1="750" y1="75" x2="785" y2="75" class="line"/>
+    <rect x="795" y="0" width="135" height="150" rx="16" fill="#f4f1ff" stroke="#5b4ba3" stroke-width="2"/>
+    <text x="862" y="52" text-anchor="middle" class="small">Query /</text><text x="862" y="82" text-anchor="middle" class="small">Lint</text><circle cx="850" cy="115" r="27" fill="none" stroke="#5b4ba3" stroke-width="7"/><line x1="870" y1="135" x2="895" y2="160" stroke="#5b4ba3" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <rect x="530" y="510" width="815" height="60" rx="12" fill="#fff" stroke="#b8c7da" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="630" y="550" class="body teal">⬆ Ingest：建頁</text><text x="850" y="550" class="body blue">🔍 Query：查詢</text><text x="1085" y="550" class="body purple">🛡 Lint：健檢</text>
+
+  <!-- Section 3 -->
+  <rect class="card" x="30" y="625" width="455" height="380" rx="14"/>
+  <rect class="tag" x="50" y="645" width="42" height="42" rx="8"/><text x="71" y="675" text-anchor="middle" class="tagtext">3</text>
+  <text x="115" y="677" class="h2 navy">產出內容</text>
+  <g class="body" transform="translate(60,725)">
+    <text y="0">📁  raw/</text><text x="230" y="0">：原始文獻 PDF</text>
+    <line x1="0" y1="25" x2="370" y2="25" class="dash"/>
+    <text y="55">📄  wiki/source-*.md</text><text x="230" y="55">：單篇文獻摘要</text>
+    <line x1="0" y1="80" x2="370" y2="80" class="dash"/>
+    <text y="110">🔗  wiki/entity-*.md</text><text x="230" y="110">：藥物 / 疾病連結節點</text>
+    <line x1="0" y1="135" x2="370" y2="135" class="dash"/>
+    <text y="165">💡  wiki/concept-*.md</text><text x="230" y="165">：概念 / 機制頁</text>
+    <line x1="0" y1="190" x2="370" y2="190" class="dash"/>
+    <text y="220">📋  wiki/index.md</text><text x="230" y="220">：全庫目錄</text>
+    <line x1="0" y1="245" x2="370" y2="245" class="dash"/>
+    <text y="275">🗒  wiki/log.md</text><text x="230" y="275">：異動日誌</text>
+  </g>
+
+  <!-- Section 4 -->
+  <rect class="card" x="505" y="625" width="865" height="380" rx="14"/>
+  <rect class="tag" x="525" y="645" width="42" height="42" rx="8"/><text x="546" y="675" text-anchor="middle" class="tagtext">4</text>
+  <text x="590" y="677" class="h2 navy">EBM 規格重點</text>
+  <rect x="530" y="720" width="385" height="250" rx="12" fill="#fff" stroke="#0f8f94" stroke-width="2"/>
+  <rect x="530" y="720" width="385" height="52" rx="12" fill="#0f8f94"/><text x="722" y="755" text-anchor="middle" fill="#fff" class="body">A. 研究型文獻</text>
+  <g class="body" transform="translate(560,810)"><text y="0">✓ Study design</text><text y="35">✓ PICO</text><text y="70">✓ effect size + 95% CI</text><text y="105">✓ RoB</text><text y="140">✓ GRADE</text><text y="175">✓ Applicability</text><text y="210">✓ Bottom line</text></g>
+  <rect x="945" y="720" width="395" height="250" rx="12" fill="#fff" stroke="#1769aa" stroke-width="2"/>
+  <rect x="945" y="720" width="395" height="52" rx="12" fill="#1769aa"/><text x="1142" y="755" text-anchor="middle" fill="#fff" class="body">B. Guideline / narrative review 類</text>
+  <g class="body" transform="translate(975,815)"><text y="0">✓ 來源型別 + 發布機構年份</text><text y="45">✓ Applicability</text><text y="90">✓ Bottom line</text><text y="145">✓ 不強制 PICO /</text><text x="28" y="180">Primary outcome / RoB</text></g>
+
+  <!-- Section 5 -->
+  <rect class="card" x="30" y="1030" width="455" height="350" rx="14"/>
+  <rect class="tag" x="50" y="1050" width="42" height="42" rx="8"/><text x="71" y="1080" text-anchor="middle" class="tagtext">5</text>
+  <text x="115" y="1082" class="h2 navy">工程與品質機制</text>
+  <g class="body" transform="translate(60,1140)"><text y="0">🛠 wiki_lint.py：壞鏈、孤立頁、frontmatter、</text><text x="37" y="32">過期頁、EBM 欄位檢查</text><line x1="0" y1="55" x2="370" y2="55" class="dash"/><text y="90">🧪 pytest 回歸測試</text><line x1="0" y1="115" x2="370" y2="115" class="dash"/><text y="150">⚙ GitHub Actions CI</text><line x1="0" y1="175" x2="370" y2="175" class="dash"/><text y="210">🕘 source_hash 過期偵測</text><line x1="0" y1="235" x2="370" y2="235" class="dash"/><text y="270">{} JSON 摘要模式避免外洩內容</text></g>
+
+  <!-- Section 6 -->
+  <rect class="card" x="505" y="1030" width="455" height="350" rx="14"/>
+  <rect class="tag" x="525" y="1050" width="42" height="42" rx="8"/><text x="546" y="1080" text-anchor="middle" class="tagtext">6</text>
+  <text x="590" y="1082" class="h2 navy">風險控管</text>
+  <rect x="530" y="1120" width="405" height="225" rx="12" class="softw" stroke="#f59e0b" stroke-width="2"/>
+  <g class="body" transform="translate(560,1160)"><text y="0">⚠ 不可公開散布 ingest 後的 wiki 內容</text><text y="45">⚠ LLM 摘要可能出錯，臨床使用前</text><text x="35" y="77">必須回核原始來源</text><text y="122">⚠ entity 頁不是 drug monograph</text><text y="167">⚠ 內建個資掃描：身分證 / 手機 / Email</text></g>
+  <path d="M845 1088 l58 24 v62 c0 52-58 83-58 83s-58-31-58-83v-62z" fill="#ffe199" stroke="#d58b00" stroke-width="4"/><rect x="825" y="1160" width="40" height="32" rx="5" fill="#d58b00"/><path d="M833 1160 v-18 a12 12 0 0 1 24 0 v18" fill="none" stroke="#d58b00" stroke-width="7"/>
+
+  <!-- Section 7 -->
+  <rect class="card" x="980" y="1030" width="390" height="350" rx="14"/>
+  <rect class="tag" x="1000" y="1050" width="42" height="42" rx="8"/><text x="1021" y="1080" text-anchor="middle" class="tagtext">7</text>
+  <text x="1065" y="1082" class="h2 navy">適合誰？</text>
+  <g class="body" transform="translate(1025,1160)"><text y="0">🩺 AI 進階臨床藥師</text><text y="70">📖 EBM / DI / 教學型藥師</text><text y="140">👥 想用 LLM 建立</text><text x="38" y="172">個人知識庫的醫療人員</text></g>
+
+  <!-- Section 8 -->
+  <rect x="30" y="1405" width="1340" height="135" rx="14" class="softr" stroke="#ff9a9a" stroke-width="2"/>
+  <rect class="tag" x="50" y="1425" width="42" height="42" rx="8"/><text x="71" y="1455" text-anchor="middle" class="tagtext">8</text>
+  <text x="115" y="1457" class="h2 navy">不是什麼？</text>
+  <g class="body" fill="#111827"><text x="190" y="1518">🚫 不是 Web App</text><text x="555" y="1518">🚫 不是公開藥學 Wiki</text><text x="960" y="1518">⚖️ 不是臨床決策支援系統</text></g>
+  <line x1="470" y1="1482" x2="470" y2="1528" stroke="#fca5a5" stroke-width="2"/><line x1="900" y1="1482" x2="900" y2="1528" stroke="#fca5a5" stroke-width="2"/>
+
+  <!-- Bottom summary -->
+  <rect x="30" y="1580" width="1340" height="120" rx="18" fill="#062b63"/>
+  <text x="88" y="1655" font-size="46">💡</text>
+  <text x="160" y="1638" fill="#fff" class="h2">一句話總結：這是一套幫臨床藥師把文獻整理成</text>
+  <text x="160" y="1685" fill="#fff" class="h2">「<tspan fill="#ffd54a">可追溯、可更新、可查詢</tspan>」知識庫的工作流程模板。</text>
+</svg>
