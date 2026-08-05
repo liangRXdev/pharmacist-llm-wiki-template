@@ -3,10 +3,6 @@
 > 一套用 **Claude Code（或任何 LLM Agent）+ Obsidian** 建立、維護個人臨床藥學實證知識庫的**工作流程與 schema**。
 > 本 repo 只提供「方法與骨架」，**不含任何臨床內容**——文獻摘要由你自己 ingest 產生。
 
-<p align="center">
-  <img src="docs/images/project-overview.svg" alt="Pharmacist LLM Wiki Template 專案資訊總表" width="900">
-</p>
-
 ---
 
 ## 這是什麼
