@@ -1,25 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-tests/test_wiki_lint.py — wiki_lint.py 回歸測試骨架
+tests/test_wiki_lint.py — wiki_lint.py 回歸測試
 
-執行：
+執行（vault 根目錄）：
     uv run --with pyyaml --with pytest pytest -q
-    # 或： pip install pyyaml pytest && pytest -q
 
-三組案例：
-    1. PII / 身分證檢核碼   → 純函式單元測試（import valid_twid / scan_pii）
-    2. hash 過期            → 端對端（subprocess + --json），含 YAML-int 與 raw/ 前綴回歸
-    3. EBM 型別分類          → 端對端，驗證 study / guideline / 型別待確認 三分流
-
-設計說明：
-    - 純函式（valid_twid 等）直接 import 測，快又精準。
-    - EBM 分類與 hash 過期邏輯目前內聯在 main()，故以 subprocess 跑 --json、解析摘要 dict 來測。
-      若日後把這兩段抽成可 import 的函式，可改寫成更細的單元測試（見檔尾 TODO）。
+三組主題：
+    1. PII / 身分證檢核碼   → 純函式單元測試（valid_twid / scan_pii）
+    2. source_hash 過期檢查  → 端對端（subprocess + --json）＋ 純函式單元測試
+                               （check_stale / recorded_hash_for），含 YAML-int 與 raw/ 前綴回歸
+    3. EBM 型別分類          → 端對端（subprocess + --json）驗證摘要契約，
+                               再以純函式單元測試涵蓋位置規則與各種寫法
 """
 import os
 import sys
-import json
 import hashlib
+import json
 import subprocess
 from pathlib import Path
 
@@ -29,7 +25,7 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "tools" / "wiki_lint.py"
 sys.path.insert(0, str(REPO / "tools"))
-import wiki_lint  # noqa: E402  (valid_twid / scan_pii / mask_pii / file_sha256)
+import wiki_lint  # noqa: E402
 
 
 # ============================================================
@@ -49,8 +45,6 @@ def write_vault(tmp_path, pages: dict, raw: dict | None = None):
 
 def run_lint(vault: Path) -> dict:
     """以 vault 為 cwd 跑 wiki_lint.py --json，回傳解析後的摘要 dict。"""
-    # encoding 必須明指 utf-8：Windows 的 text=True 預設走 locale 編碼（cp950），
-    # 遇到腳本輸出的中文指標名會 UnicodeDecodeError，stdout 變成 None。
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), "--json"],
         cwd=str(vault), capture_output=True, text=True, encoding="utf-8",
@@ -60,7 +54,7 @@ def run_lint(vault: Path) -> dict:
 
 
 def page(front: dict, body: str) -> str:
-    """組出 frontmatter + 正文的 markdown。front 的值原樣寫入（含未引號數字測試）。"""
+    """組出 frontmatter + 正文的 markdown。front 的值原樣寫入。"""
     lines = ["---"]
     for k, v in front.items():
         lines.append(f"{k}: {v}")
@@ -78,6 +72,17 @@ FM_BASE = {
 }
 
 
+def make_page(body, fm=None, name="s"):
+    """組出 classify_source 需要的最小 page dict。"""
+    f = {"type": "source"}
+    if fm:
+        f.update(fm)
+    return {"name": name, "fm": f, "body": body}
+
+
+# ============================================================
+#  Group 1 — 身分證檢核碼 / PII 掃描（純函式）
+# ============================================================
 def find_numeric_hash_content():
     """確定性地找出一段內容，使其 file_sha256()（sha256 前 16 碼）全為數字。
     用於回歸測試「YAML 把全數字雜湊載成 int」的 str() 強制轉型修補。"""
@@ -89,9 +94,6 @@ def find_numeric_hash_content():
     pytest.skip("找不到全數字雜湊內容（理論上不會發生）")
 
 
-# ============================================================
-#  Group 1 — 身分證檢核碼 / PII 掃描（純函式）
-# ============================================================
 class TestPIIChecksum:
     def test_valid_twid_true(self):
         # A123456789 為合法檢核碼
@@ -132,58 +134,7 @@ class TestPIIChecksum:
 
 
 # ============================================================
-#  Group 2 — hash 過期偵測（端對端）
-# ============================================================
-class TestHashStaleness:
-    RAW = {"trialA.pdf": b"content-v1"}
-
-    def _hash(self):
-        return hashlib.sha256(self.RAW["trialA.pdf"]).hexdigest()[:16]
-
-    def test_correct_hash_not_stale(self, tmp_path):
-        fm = {**FM_BASE, "sources": "[trialA.pdf]", "source_hash": self._hash()}
-        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
-        out = run_lint(v)
-        assert out["stale"] == 0
-        assert out["hash_untracked"] == 0
-
-    def test_wrong_hash_is_stale(self, tmp_path):
-        fm = {**FM_BASE, "sources": "[trialA.pdf]", "source_hash": "deadbeefdeadbeef"}
-        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
-        assert run_lint(v)["stale"] == 1
-
-    def test_missing_hash_is_untracked_not_stale(self, tmp_path):
-        fm = {**FM_BASE, "sources": "[trialA.pdf]"}  # 無 source_hash
-        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
-        out = run_lint(v)
-        assert out["stale"] == 0
-        assert out["hash_untracked"] == 1
-
-    def test_raw_prefix_in_sources_still_matches(self, tmp_path):
-        # 回歸：sources 寫成 raw/trialA.pdf（schema 慣例）也要對到 raw/trialA.pdf
-        fm = {**FM_BASE, "sources": "[raw/trialA.pdf]", "source_hash": self._hash()}
-        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
-        out = run_lint(v)
-        assert out["stale"] == 0 and out["hash_untracked"] == 0
-
-    def test_numeric_hash_yaml_int_regression(self, tmp_path):
-        # 回歸：全數字雜湊會被 YAML 載成 int；未 str() 轉型會造成 str≠int 恆真 → 假性過期
-        data, numeric_hash = find_numeric_hash_content()
-        fm = {**FM_BASE, "sources": "[num.pdf]", "source_hash": numeric_hash}  # 不加引號
-        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")},
-                        {"num.pdf": data})
-        assert run_lint(v)["stale"] == 0
-
-    def test_missing_raw_file_is_skipped(self, tmp_path):
-        # raw/ 為空（fresh public clone）→ 不誤判
-        fm = {**FM_BASE, "sources": "[ghost.pdf]", "source_hash": "abc123"}
-        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, raw={})
-        out = run_lint(v)
-        assert out["stale"] == 0 and out["hash_untracked"] == 0
-
-
-# ============================================================
-#  Group 3 — EBM 型別分類（端對端）
+#  Group 2 — EBM 型別分類（端對端，--json 摘要契約）
 # ============================================================
 class TestEBMClassification:
     def test_study_page_full_check(self, tmp_path):
@@ -210,21 +161,16 @@ class TestEBMClassification:
         assert out["ebm_undetermined"] >= 1
         assert out["source_guideline"] == 0            # 關鍵：沒有被吞進 guideline
 
+    def test_pii_reported_in_summary(self, tmp_path):
+        body = "| Study design | clinical practice guideline |\n病患 A123456789 入院。"
+        fm = {**FM_BASE, "sources": "[g.pdf]"}
+        out = run_lint(write_vault(tmp_path, {"s": page(fm, body)}, {"g.pdf": b"x"}))
+        assert out["pii"] >= 1
+
 
 # ============================================================
-#  Group 4 — classify_source / check_stale（純函式單元測試）
+#  Group 3 — classify_source（純函式單元測試）
 # ============================================================
-#  重構後 EBM 分類與過期檢查已抽成可 import 的純函式，
-#  毋須再起 subprocess —— 直接呼叫、毫秒級、定位精準。
-#  Group 2/3 的 subprocess 案例保留為 --json 摘要的 contract test。
-def make_page(body, fm=None, name="s"):
-    """組出 classify_source / check_stale 需要的最小 page dict。"""
-    f = {"type": "source"}
-    if fm:
-        f.update(fm)
-    return {"name": name, "fm": f, "body": body}
-
-
 class TestClassifySourceUnit:
     def test_non_source_returns_none(self):
         assert wiki_lint.classify_source(make_page("x", {"type": "concept"})) is None
@@ -265,7 +211,7 @@ class TestClassifySourceUnit:
 class TestStudyDesignExtraction:
     """回歸：`## Study design` 獨立標題寫法必須被辨識。
 
-    修正前只認「同一行帶冒號」與表格列；獨立標題寫法會抓不到 → sd 為空 →
+    只認「同一行帶冒號」與表格列時，獨立標題寫法會抓不到 → sd 為空 →
     落入 undetermined/guideline，**8 欄檢查靜默失效**。
     """
 
@@ -328,20 +274,20 @@ class TestTitleIsOnlyFallback:
 
     def test_title_nonstudy_does_not_veto_explicit_study_design(self):
         body = "| Study design | 橫斷面研究（cross-sectional）|"
-        res = wiki_lint.classify_source(make_page(body, {"title": "抗膽鹼負荷量表驗證"}))
+        res = wiki_lint.classify_source(make_page(body, {"title": "ADS 抗膽鹼負荷量表"}))
         assert res["category"] == "study"
 
     def test_title_nonstudy_still_used_when_sd_has_no_study_kw(self):
-        body = "| Study design | 學會發布之照護建議 |"
+        body = "| Study design | 台灣胸腔醫學會發布之照護建議 |"
         res = wiki_lint.classify_source(
-            make_page(body, {"title": "COPD 診療指引 2023"}))
+            make_page(body, {"title": "Taiwan COPD 診療指引 2023"}))
         assert res["category"] == "guideline"
 
 
 class TestNoGenericKeywordFalsePositives:
     """回歸：NONSTUDY_KW 不得含會在一般敘述/英文單字內部命中的泛用詞。
 
-    修正前 `照護`（長期照護機構）、`準則`（診斷準則）、`建議`、
+    修正前 `照護`（農村長期照護機構）、`準則`（REGISCAR 診斷準則）、`建議`、
     `scale` / `list` / `start` 會在單篇研究的 Study design 欄裡假命中，製造假衝突。
     """
 
@@ -350,28 +296,28 @@ class TestNoGenericKeywordFalsePositives:
         assert junk not in wiki_lint.NONSTUDY_KW
 
     def test_care_facility_prose_does_not_conflict(self):
-        body = "| Study design | 橫斷面次級分析（cross-sectional），長期照護機構居民 |"
+        body = "| Study design | 橫斷面次級分析（cross-sectional），農村長期照護機構居民 |"
         assert wiki_lint.classify_source(make_page(body))["category"] == "study"
 
     def test_diagnostic_criteria_prose_does_not_conflict(self):
-        body = "| Study design | 多中心回溯性登錄研究；收案採標準診斷準則 |"
+        body = "| Study design | 多中心回溯性登錄研究；收案採 REGISCAR 診斷準則 |"
         assert wiki_lint.classify_source(make_page(body))["category"] == "study"
 
     def test_regulatory_label_is_guideline_despite_negated_rct(self):
-        # 藥品仿單的 sd 常出現「而非 head-to-head RCT」這類否定句
-        body = "| Study design | 核准仿單；劑量建議基於申請資料而非 head-to-head RCT |"
+        # FDA 仿單的 sd 常出現「而非 head-to-head RCT」這類否定句
+        body = "| Study design | 美國 FDA 核准仿單；劑量建議基於申請資料而非 head-to-head RCT |"
         assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
 
     def test_scientific_statement_is_guideline_despite_negated_rct(self):
-        body = "| Study design | Scientific Statement — 敘述性文獻回顧 + 專家建議，非 RCT |"
+        body = "| Study design | HFSA Scientific Statement — 敘述性文獻回顧 + 專家建議，非 RCT |"
         assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
 
     def test_assessment_tool_is_guideline(self):
-        body = "| Study design | 偏差風險評估工具（risk-of-bias tool version 2）|"
+        body = "| Study design | 偏差風險評估工具（Cochrane risk-of-bias tool version 2）|"
         assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
 
     def test_drug_info_database_is_guideline(self):
-        body = "| Study design | 次級藥物資訊資料庫 |"
+        body = "| Study design | 次級藥物資訊資料庫（Micromedex）|"
         assert wiki_lint.classify_source(make_page(body))["category"] == "guideline"
 
     def test_external_validation_is_study(self):
@@ -382,7 +328,7 @@ class TestNoGenericKeywordFalsePositives:
 class TestNarrativeReviewNotMisclassified:
     """回歸：narrative review 的 Study design 欄常含否定句或他篇論文的設計。
 
-    子字串比對不懂否定、也不懂引用語境，修正前這三種寫法都會被誤判為單篇研究，
+    子字串比對不懂否定、也不懂引用語境；沒有位置規則時這三種寫法都會被誤判為單篇研究，
     進而逼使作者為一篇綜論補寫**不存在的** primary/secondary outcome。
     """
 
@@ -430,6 +376,59 @@ class TestNarrativeReviewNotMisclassified:
         body = "| Study design | clinical practice guideline + systematic review of RCTs |"
         res = wiki_lint.classify_source(make_page(body))
         assert res["category"] == "guideline"
+
+
+class TestHashStaleness:
+    RAW = {"trialA.pdf": b"content-v1"}
+
+    def _hash(self):
+        return hashlib.sha256(self.RAW["trialA.pdf"]).hexdigest()[:16]
+
+    def test_correct_hash_not_stale(self, tmp_path):
+        fm = {**FM_BASE, "sources": "[trialA.pdf]", "source_hash": self._hash()}
+        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
+        out = run_lint(v)
+        assert out["stale"] == 0
+        assert out["hash_untracked"] == 0
+
+    def test_wrong_hash_is_stale(self, tmp_path):
+        fm = {**FM_BASE, "sources": "[trialA.pdf]", "source_hash": "deadbeefdeadbeef"}
+        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
+        assert run_lint(v)["stale"] == 1
+
+    def test_missing_hash_is_untracked_not_stale(self, tmp_path):
+        fm = {**FM_BASE, "sources": "[trialA.pdf]"}  # 無 source_hash
+        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
+        out = run_lint(v)
+        assert out["stale"] == 0
+        assert out["hash_untracked"] == 1
+
+    def test_raw_prefix_in_sources_still_matches(self, tmp_path):
+        # 回歸：sources 寫成 raw/trialA.pdf（schema 慣例）也要對到 raw/trialA.pdf
+        fm = {**FM_BASE, "sources": "[raw/trialA.pdf]", "source_hash": self._hash()}
+        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, self.RAW)
+        out = run_lint(v)
+        assert out["stale"] == 0 and out["hash_untracked"] == 0
+
+    def test_numeric_hash_yaml_int_regression(self, tmp_path):
+        # 回歸：全數字雜湊會被 YAML 載成 int；未 str() 轉型會造成 str≠int 恆真 → 假性過期
+        data, numeric_hash = find_numeric_hash_content()
+        fm = {**FM_BASE, "sources": "[num.pdf]", "source_hash": numeric_hash}  # 不加引號
+        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")},
+                        {"num.pdf": data})
+        assert run_lint(v)["stale"] == 0
+
+    def test_missing_raw_file_is_skipped(self, tmp_path):
+        # raw/ 為空（fresh public clone）→ 不誤判
+        fm = {**FM_BASE, "sources": "[ghost.pdf]", "source_hash": "abc123"}
+        v = write_vault(tmp_path, {"s": page(fm, "| Study design | RCT |")}, raw={})
+        out = run_lint(v)
+        assert out["stale"] == 0 and out["hash_untracked"] == 0
+
+
+# ============================================================
+#  Group 3 — EBM 型別分類（端對端）
+# ============================================================
 
 
 class TestCheckStaleUnit:
