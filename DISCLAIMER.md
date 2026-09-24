@@ -41,5 +41,5 @@
 
 ## 4. 授權範圍摘要
 
-- **MIT 授權**（見 `LICENSE`）涵蓋：`CLAUDE.md` schema、流程設計、`Templates/`、`docs/`、`README.md`。
+- **MIT 授權**（見 `LICENSE`）涵蓋：`CLAUDE.md` schema、流程設計、`Templates/`、`docs/`、`README.md`、`README.zh-TW.md`。
 - **不涵蓋**：你 ingest 後產生的任何臨床內容，其權利歸原始文獻著作權人所有。

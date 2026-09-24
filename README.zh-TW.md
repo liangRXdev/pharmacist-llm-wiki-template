@@ -1,0 +1,192 @@
+# 藥師 LLM 知識庫模板（Pharmacist LLM Wiki Template）
+
+[English](README.md) | **繁體中文**
+
+> 一套用 **Claude Code（或任何 LLM Agent）+ Obsidian** 建立、維護個人臨床藥學實證知識庫的**工作流程與 schema**。
+> 本 repo 只提供「方法與骨架」，**不含任何臨床內容**——文獻摘要由你自己 ingest 產生。
+
+---
+
+## 這是什麼
+
+把零散的臨床指引、RCT、meta-analysis 文獻，透過標準化流程交由 LLM 摘要成**互相連結的 wiki 頁面**，建立可即時查詢、可稽核、會自我健檢的個人知識庫。
+
+核心特色：
+- **三流程 SOP**：Ingest（建頁）/ Query（查詢）/ Lint（健檢）
+- **EBM source 頁最低欄位要求**：強制記錄 Study design、PICO、effect size + 95% CI、RoB、GRADE、Applicability、Bottom line
+- **雙向連結知識圖譜**：source ↔ entity ↔ concept，可用 Obsidian graph view 瀏覽
+- **PDF 提取策略**：先用 pdf-inspector **分流**（<5 秒判斷這份 PDF 該走哪條路），再依結果選
+  pdfminer.six（全文正文）／Docling（關鍵臨床表格，品質最佳）／MinerU（備援）；
+  **含三種「安靜失敗」的判別法**——工具不報錯但表格是錯的，那才是真正會傷到你的情況
+- **機械化 lint 腳本**（`tools/wiki_lint.py`）：壞鏈/孤立頁/稀疏頁/frontmatter 缺欄 + EBM 欄位依型別查核 + 圖譜指標，
+  並以**來源檔內容雜湊**（非 mtime）偵測「原始文獻換版了但頁面沒更新」
+- **病患資料自動遮罩**＋**異動日誌可稽核**
+
+---
+
+## 30 秒看懂工作流程
+
+> 以下為**虛構示意範例**（fictional / illustrative），檔名與頁面皆為佔位符，不含任何真實臨床內容或建議。
+
+**Before** — 把一篇文獻 PDF 放進 `raw/`：
+
+```text
+raw/
+└── example-source.pdf
+```
+
+**你只要說一句話：**
+
+```text
+請處理 raw/example-source.pdf
+```
+
+**Claude Code 會依 `CLAUDE.md` schema，在你確認重點後協助：**
+
+1. 判定來源型別（RCT / meta-analysis / guideline / …）
+2. 依來源型別提取 EBM 欄位
+   - 研究型：PICO、effect size、95% CI、RoB、GRADE、Applicability、Bottom line
+   - Guideline / narrative review 類：來源型別、發布機構年份、Applicability、Bottom line
+3. 建立 source 摘要頁
+4. 新建或更新相關 entity / concept 頁並建立雙向連結
+5. 更新 `wiki/index.md`（全庫目錄）
+6. 在 `wiki/log.md` 追加異動記錄
+7. （若你要求）順帶跑 lint 健檢
+
+**After** — `wiki/` 長出互相連結的頁面：
+
+```text
+wiki/
+├── source-example-source.md      ← 文獻摘要 + EBM 欄位
+├── entity-drug-x.md              ← 藥物實體頁（連結節點）
+├── concept-clinical-topic-y.md   ← 概念/機制頁
+├── index.md                      ← 已更新
+└── log.md                        ← 已追加記錄
+```
+
+**Then** — 之後可隨時查詢或健檢：
+
+```text
+請問這篇文獻對 topic Y 的臨床意義是什麼？   ← Query
+請做 lint                                  ← Lint
+```
+
+---
+
+## 知識圖譜長這樣
+
+文獻經 ingest 後，會織成 source ↔ entity ↔ concept 互連的網絡（以下為**示意**，節點皆為佔位範例，不含臨床內容）：
+
+```mermaid
+graph LR
+  R[("raw/ 原始文獻 PDF")]
+  R -->|ingest| S1["source: 文獻 A"]
+  R -->|ingest| S2["source: 文獻 B"]
+  S1 --> C1(("concept: 機制 / 操作框架"))
+  S2 --> C1
+  S1 --> E1["entity: 藥物 X"]
+  C1 --> E1
+  S2 --> E2["entity: 疾病 Y"]
+  C1 -. 矛盾標記 .-> C2(("concept: 對照主題"))
+  Q{{"query: 提問合成頁"}} --> C1
+  Q --> S2
+```
+
+> 在 Obsidian 中可用 **Graph View** 即時瀏覽你自己的真實知識圖譜（會隨 ingest 自動長大）。
+
+---
+
+## 目錄結構
+
+```
+.
+├── CLAUDE.md          # LLM 操作規範（schema）— 開箱即用；僅 §六 領域規則可選用改寫
+├── DISCLAIMER.md      # 臨床免責 + 著作權聲明（務必閱讀）
+├── LICENSE            # 方法/模板採 MIT；你的文獻摘要內容不在授權範圍
+├── raw/               # 放你的原始文獻（PDF）；.gitignore 預設不上傳
+│   ├── finish/        # 已 ingest 的文獻
+│   └── assets/        # 圖片
+├── wiki/              # LLM 維護的知識頁面（初始為空，僅含 .gitkeep）
+│                      #   內容受 .gitignore 白名單保護，預設不追蹤
+├── Templates/         # 各 type 頁面模板 + index.md / log.md 空骨架
+├── tools/
+│   └── wiki_lint.py   # 機械化健檢腳本（壞鏈/孤立/EBM 欄位/圖譜指標）
+├── tests/
+│   └── test_wiki_lint.py  # wiki_lint 回歸測試（pytest）
+├── .github/workflows/
+│   └── ci.yml         # GitHub Actions：push/PR 跑測試 + lint 摘要
+└── docs/
+    ├── quickstart-for-clinical-pharmacists.md  # 新手 Quick Start（不寫程式者從這裡開始）
+    ├── evidence-discipline.md                  # 六條 ingest 證據紀律的踩坑成因（規則本身在 CLAUDE.md §3.1.1）
+    ├── pdf-extraction-strategy.md              # 分流表 + 何時用 pdf-inspector / pdfminer / Docling / MinerU、失敗模式與搶救法
+    └── setup-mineru.md                         # 上述四個工具的安裝指南
+```
+
+> Lint 用法：在 vault 根目錄執行 `uv run --with pyyaml python tools/wiki_lint.py`，產生 `output/lint-YYYY-MM-DD.md`。
+
+---
+
+## 快速開始
+
+> 🩺 **不寫程式的臨床藥師請走這裡**：[**新手 Quick Start**](docs/quickstart-for-clinical-pharmacists.md)
+> ——只回答四件事：安裝什麼、文獻怎麼放、怎麼對 Claude Code 下指令、如何確認沒出錯也沒洩漏資料。
+>
+> 以下為工程使用者的濃縮版，步驟相同。
+
+1. **Fork / 下載** 本 repo，用 Obsidian 開啟資料夾為一個 vault。
+2. **初始化 wiki**：把 `Templates/index.md`、`Templates/log.md` 複製到 `wiki/`（fresh clone 的 `wiki/` 只含 `.gitkeep`；複製後即為起始骨架）。
+3. （選用）若你不在台灣、不需要健保給付與多語藥物標籤規則，改寫 `CLAUDE.md` §六領域特殊規則。
+   其餘部分開箱即用，**不需要做任何字串取代**。
+4. （選用）**一般 ingest 不需預裝任何東西**——pdfminer 與 pdf-inspector 都由 `uv` 即時取用。
+   只有在文獻的**表格特別關鍵**（劑量表、藥敏閾值表、決策矩陣）時，才依
+   [`docs/setup-mineru.md`](docs/setup-mineru.md) 安裝 Docling。
+5. 把第一篇文獻 PDF 放進 `raw/`。
+6. 在 vault 目錄啟動 Claude Code，對它說：**「請處理 raw/你的檔名.pdf」**。
+7. LLM 會依 schema 建立 source 頁、相關 entity/concept 頁，並更新 index 與 log。
+8. 之後可隨時「請問關於 XXX…」（Query）或「請做 lint」（健檢）。
+
+---
+
+## 開發 / 測試（選用）
+
+`tools/wiki_lint.py` 附帶 pytest 回歸測試，並由 GitHub Actions 在每次 push / PR 自動執行。一般使用者**不需理會**；僅在你要修改 lint 腳本時相關。
+
+**本機跑測試**（在 repo 根目錄）：
+
+```bash
+uv run --with pyyaml --with pytest pytest -q
+```
+
+涵蓋三大類：身分證檢核碼 / PII 遮罩、來源內容雜湊過期偵測、EBM 型別分流（study / guideline / 型別待確認）。
+
+**CI（GitHub Actions，`.github/workflows/ci.yml`）**：
+
+- 觸發：push 到 `main`、對 `main` 的 PR、手動（workflow_dispatch）
+- 內容：跑 `pytest -q`，再跑 `wiki_lint.py --json` 做煙霧測試
+- lint 固定用 **`--json` 摘要模式**：只輸出數量統計，**不寫 `output/`、不外洩任何頁面內容** → 即使在 public repo 也不會洩漏受著作權保護的摘要或病患資料
+- 結果可在 repo 的 **Actions** 分頁查看（綠勾＝健檢通過）
+
+> 修改 `wiki_lint.py` 後，若改動了 `--json` 摘要的欄位名稱（如 `stale`、`hash_untracked`），對應測試會變紅——這是刻意的 contract test，請同步更新測試斷言。
+
+---
+
+## 適用對象
+
+- 臨床藥師、藥學生、EBM 工作者
+- 任何想用 LLM 把文獻轉成結構化、可查詢知識庫的醫療專業人員
+
+> 預設規則含健保給付、多語藥物標籤、台灣臨床情境，可依你的國家/制度自行調整 `CLAUDE.md` §六。
+
+---
+
+## ⚠️ 重要限制
+
+- **不可公開散布你 ingest 後的 wiki 內容**：多數來源（指引、UpToDate、Micromedex、NCCN…）受著作權保護，個人合理使用 ≠ 可再散布。詳見 [`DISCLAIMER.md`](DISCLAIMER.md)。
+- **LLM 摘要可能含錯誤**：臨床決策前務必回核原始來源。
+- 本 repo 之 MIT 授權僅涵蓋 **schema / 流程 / 模板**，不涵蓋你產生的內容。
+
+---
+
+## 致謝 / 貢獻
+
+歡迎以 issue / PR 改進 schema、流程或 PDF 工具策略。請勿在 PR 中包含任何受著作權保護的文獻內容或個人資料。
